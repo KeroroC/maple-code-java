@@ -1,6 +1,7 @@
 package com.maplecode.config;
 
 import com.maplecode.error.ConfigException;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -73,20 +74,18 @@ class ConfigLoaderTest {
 
     @Test
     void api_key_env_placeholder_replaced(@TempDir Path tmp) throws IOException {
+        String home = System.getenv("HOME");
+        Assumptions.assumeTrue(home != null && !home.isBlank(), "HOME env var must be set");
+
         Files.writeString(tmp.resolve("config.yaml"), """
             protocol: anthropic
             model: claude-sonnet-4-6
             base_url: https://api.anthropic.com
-            api_key: ${MY_TEST_KEY}
+            api_key: ${HOME}
             """);
-        AppConfig cfg;
-        try {
-            System.setProperty("MY_TEST_KEY_BACKUP", "real-secret");
-            // needs environment variables not system properties — next test covers real env var assertion
-            cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
-        } finally { /* next test cleans up */ }
-        // env-var substitution uses System.getenv, hard to mock without ProcessBuilder
-        // real assertion lives in unknown_env_var_throws
+        AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+        assertEquals(home, cfg.apiKey(),
+            "api_key should be replaced with the value of $HOME");
     }
 
     @Test

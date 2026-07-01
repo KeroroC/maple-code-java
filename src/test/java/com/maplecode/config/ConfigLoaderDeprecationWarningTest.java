@@ -36,7 +36,7 @@ class ConfigLoaderDeprecationWarningTest {
         String output = err.toString();
         assertTrue(output.contains("deprecated"),
             "expected deprecation warning, got stderr: " + output);
-        assertTrue(output.contains("type=adaptive"),
+        assertTrue(output.contains("type: adaptive"),
             "warning should suggest migration: " + output);
     }
 

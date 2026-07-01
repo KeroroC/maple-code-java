@@ -79,7 +79,7 @@ public final class ConfigLoader {
         if (type == ThinkingConfig.Type.ENABLED) {
             System.err.println("warning: extended_thinking.type=enabled is deprecated for "
                 + "Opus 4.6 / Sonnet 4.6 and returns HTTP 400 on Opus 4.7. "
-                + "Prefer (type=adaptive with effort=high):\n"
+                + "Prefer:\n"
                 + "    type: adaptive\n"
                 + "    effort: high");
         }
