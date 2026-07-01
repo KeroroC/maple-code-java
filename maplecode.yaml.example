@@ -1,0 +1,19 @@
+# MapleCode 示例配置
+# 复制到 ./maplecode.yaml 或 ~/.maplecode/config.yaml 后修改。
+
+protocol: anthropic            # "anthropic" | "openai"
+model: claude-sonnet-4-6
+base_url: https://api.anthropic.com
+api_key: ${ANTHROPIC_API_KEY} # ${ENV_VAR} 占位符，从环境变量解析
+
+system_prompt: |
+  You are MapleCode, a helpful coding assistant. Be concise.
+
+extended_thinking:             # 可选；OpenAI 忽略此块
+  type: adaptive               # "adaptive"（推荐） | "enabled"（legacy，Opus 4.7 上返回 400）
+  effort: high                 # adaptive 时：low | medium | high
+  # budget_tokens: 10000       # 仅 enabled 时：>= 1024 且 < max_tokens
+
+timeouts:
+  connect_seconds: 10
+  read_seconds: 60
