@@ -17,6 +17,10 @@ public final class ConfigLoader {
     private static final Pattern ENV_PLACEHOLDER = Pattern.compile("\\$\\{([A-Z_][A-Z0-9_]*)\\}");
     private static final int DEFAULT_CONNECT_SECONDS = 10;
     private static final int DEFAULT_READ_SECONDS = 60;
+    private static final String DEFAULT_SYSTEM_PROMPT =
+        "你是MapleCode，一个终端环境的AI编程助手。\n"
+        + "你擅长阅读代码、编写代码和调试问题。\n"
+        + "你会先思考再行动，每一步都解释你的推理过程。";
 
     private ConfigLoader() {}
 
@@ -40,6 +44,9 @@ public final class ConfigLoader {
         String apiKey = expandEnv(requireString(root, "api_key"));
 
         String systemPrompt = optionalString(root, "system_prompt");
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        }
         ThinkingConfig thinking = parseThinking(optionalMap(root, "extended_thinking"));
 
         Map<?, ?> timeoutsMap = optionalMap(root, "timeouts");

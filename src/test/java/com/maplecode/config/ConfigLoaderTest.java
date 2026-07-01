@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigLoaderTest {
 
@@ -45,7 +46,7 @@ class ConfigLoaderTest {
     }
 
     @Test
-    void minimal_config_optional_fields_null(@TempDir Path tmp) throws IOException {
+    void minimal_config_uses_default_system_prompt(@TempDir Path tmp) throws IOException {
         Files.writeString(tmp.resolve("config.yaml"), """
             protocol: openai
             model: gpt-4o
@@ -54,10 +55,25 @@ class ConfigLoaderTest {
             """);
         AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
         assertEquals("openai", cfg.protocol());
-        assertNull(cfg.systemPrompt());
+        assertNotNull(cfg.systemPrompt());
+        assertTrue(cfg.systemPrompt().contains("MapleCode"));
         assertNull(cfg.thinking());
         assertEquals(10, cfg.timeouts().connectSeconds());   // default
         assertEquals(60, cfg.timeouts().readSeconds());      // default
+    }
+
+    @Test
+    void blank_system_prompt_falls_back_to_default(@TempDir Path tmp) throws IOException {
+        Files.writeString(tmp.resolve("config.yaml"), """
+            protocol: anthropic
+            model: claude-sonnet-4-6
+            base_url: https://api.anthropic.com
+            api_key: sk-test
+            system_prompt: "  "
+            """);
+        AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+        assertNotNull(cfg.systemPrompt());
+        assertTrue(cfg.systemPrompt().contains("MapleCode"));
     }
 
     @Test
