@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,10 +25,12 @@ class OpenAiRequestMapperTest {
         var req = new ChatRequest("gpt-4o", null,
             List.of(new ChatMessage(ChatMessage.Role.USER, "hi")), null);
 
-        HttpRequest http = mapper.toHttpRequest(req, "https://api.openai.com/v1", "sk-test");
+        HttpRequest http = mapper.toHttpRequest(req, "https://api.openai.com/v1", "sk-test", Duration.ofSeconds(45));
         assertEquals(URI.create("https://api.openai.com/v1/chat/completions"), http.uri());
         assertEquals("application/json", http.headers().firstValue("content-type").orElseThrow());
         assertEquals("Bearer sk-test", http.headers().firstValue("authorization").orElseThrow());
+        assertEquals(Duration.ofSeconds(45), http.timeout().orElseThrow(),
+            "read timeout should come from the supplied Duration, not a hardcoded 60s");
 
         String body = mapper.toJsonBody(req);
         assertTrue(body.contains("\"model\":\"gpt-4o\""));

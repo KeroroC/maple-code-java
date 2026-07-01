@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,11 +25,13 @@ class AnthropicRequestMapperTest {
         var req = new ChatRequest("claude-sonnet-4-6", null,
             List.of(new ChatMessage(ChatMessage.Role.USER, "hi")), null);
 
-        HttpRequest http = mapper.toHttpRequest(req, "https://api.anthropic.com", "sk-test");
+        HttpRequest http = mapper.toHttpRequest(req, "https://api.anthropic.com", "sk-test", Duration.ofSeconds(30));
         assertEquals(URI.create("https://api.anthropic.com/v1/messages"), http.uri());
         assertEquals("application/json", http.headers().firstValue("content-type").orElseThrow());
         assertEquals("sk-test", http.headers().firstValue("x-api-key").orElseThrow());
         assertEquals("2023-06-01", http.headers().firstValue("anthropic-version").orElseThrow());
+        assertEquals(Duration.ofSeconds(30), http.timeout().orElseThrow(),
+            "read timeout should come from the supplied Duration, not a hardcoded 60s");
 
         String body = mapper.toJsonBody(req);
         assertTrue(body.contains("\"model\":\"claude-sonnet-4-6\""));

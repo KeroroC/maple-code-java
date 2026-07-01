@@ -18,11 +18,11 @@ public final class AnthropicRequestMapper {
     private static final int MAX_TOKENS = 16384;
     private static final String ANTHROPIC_VERSION = "2023-06-01";
 
-    public HttpRequest toHttpRequest(ChatRequest req, String baseUrl, String apiKey) {
+    public HttpRequest toHttpRequest(ChatRequest req, String baseUrl, String apiKey, Duration readTimeout) {
         String body = toJsonBody(req);
         return HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + "/v1/messages"))
-            .timeout(Duration.ofSeconds(60))
+            .timeout(readTimeout)
             .header("content-type", "application/json")
             .header("x-api-key", apiKey)
             .header("anthropic-version", ANTHROPIC_VERSION)

@@ -34,7 +34,7 @@ public final class OpenAiProvider implements LlmProvider {
 
     @Override
     public void stream(ChatRequest request, Consumer<StreamChunk> sink) {
-        HttpRequest httpReq = mapper.toHttpRequest(request, config.baseUrl(), config.apiKey());
+        HttpRequest httpReq = mapper.toHttpRequest(request, config.baseUrl(), config.apiKey(), config.timeouts().readDuration());
         HttpResponse<java.util.stream.Stream<String>> resp;
         try {
             resp = httpClient.send(httpReq, HttpResponse.BodyHandlers.ofLines());

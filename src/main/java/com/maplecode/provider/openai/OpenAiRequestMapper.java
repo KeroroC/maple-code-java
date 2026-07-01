@@ -15,11 +15,11 @@ public final class OpenAiRequestMapper {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    public HttpRequest toHttpRequest(ChatRequest req, String baseUrl, String apiKey) {
+    public HttpRequest toHttpRequest(ChatRequest req, String baseUrl, String apiKey, Duration readTimeout) {
         String body = toJsonBody(req);
         return HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + "/chat/completions"))
-            .timeout(Duration.ofSeconds(60))
+            .timeout(readTimeout)
             .header("content-type", "application/json")
             .header("authorization", "Bearer " + apiKey)
             .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
