@@ -12,17 +12,20 @@ public final class AnthropicStreamParser {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private BlockType currentBlock = BlockType.NONE;
+    private String lastStopReason = null;
 
     private enum BlockType { NONE, THINKING, TEXT }
 
     public void reset() {
         currentBlock = BlockType.NONE;
+        lastStopReason = null;
     }
 
     public void feed(SseEvent event, Consumer<StreamChunk> sink) {
         String type = event.eventType();
         if (type.equals("message_start")) {
             currentBlock = BlockType.NONE;
+            lastStopReason = null;
             sink.accept(new StreamChunk.MessageStart());
             return;
         }
@@ -51,8 +54,18 @@ public final class AnthropicStreamParser {
             currentBlock = BlockType.NONE;
             return;
         }
+        if (type.equals("message_delta")) {
+            // Anthropic 在单独的 message_delta 事件里给出最终的 stop_reason
+            // （可能在 content_block_stop 之后、message_stop 之前到达）。
+            JsonNode node = parse(event.data());
+            String stopReason = node.path("delta").path("stop_reason").asText(null);
+            if (stopReason != null && !stopReason.isEmpty()) {
+                lastStopReason = stopReason;
+            }
+            return;
+        }
         if (type.equals("message_stop")) {
-            sink.accept(new StreamChunk.MessageEnd(StreamChunk.StopReason.END_TURN));
+            sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason)));
             return;
         }
         if (type.equals("error")) {
@@ -63,6 +76,20 @@ public final class AnthropicStreamParser {
             return;
         }
         // ping / 未知 —— 忽略
+    }
+
+    private static StreamChunk.StopReason mapStopReason(String reason) {
+        if (reason == null || reason.isEmpty()) {
+            // 没看到 message_delta —— 按 Anthropic 的"自然结束"处理
+            return StreamChunk.StopReason.END_TURN;
+        }
+        return switch (reason) {
+            case "end_turn"      -> StreamChunk.StopReason.END_TURN;
+            case "max_tokens"    -> StreamChunk.StopReason.MAX_TOKENS;
+            case "stop_sequence" -> StreamChunk.StopReason.STOP;
+            case "tool_use"      -> StreamChunk.StopReason.ERROR;  // v1 不支持 tool use
+            default              -> StreamChunk.StopReason.STOP;
+        };
     }
 
     private JsonNode parse(String data) {

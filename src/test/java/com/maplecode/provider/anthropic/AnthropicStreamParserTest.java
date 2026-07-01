@@ -138,4 +138,38 @@ class AnthropicStreamParserTest {
         );
         assertEquals(0, chunks.size());
     }
+
+    @Test
+    void message_delta_max_tokens_emits_max_tokens_stop_reason() {
+        // Anthropic 把 stop_reason 放在独立的 message_delta 事件里。
+        // 之前会忽略，导致 max_tokens 截断被误判为正常结束，截断的回复被
+        // 当作完整消息追加到会话。这次新增 message_delta 处理。
+        var chunks = feed(
+            "event: message_start\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m_1\"}}\n",
+            "",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n",
+            "",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Truncated...\"}}\n",
+            "",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":0}\n",
+            "",
+            "event: message_delta\n",
+            "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"}}\n",
+            "",
+            "event: message_stop\n",
+            "data: {\"type\":\"message_stop\"}\n",
+            ""
+        );
+        assertEquals(3, chunks.size());
+        assertInstanceOf(StreamChunk.MessageStart.class, chunks.get(0));
+        assertEquals("Truncated...",
+            ((StreamChunk.TextDelta) chunks.get(1)).text());
+        assertEquals(StreamChunk.StopReason.MAX_TOKENS,
+            ((StreamChunk.MessageEnd) chunks.get(2)).reason(),
+            "max_tokens 截断必须正确归类，不能降级为 END_TURN");
+    }
 }
