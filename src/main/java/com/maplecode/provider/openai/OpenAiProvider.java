@@ -10,7 +10,6 @@ import com.maplecode.provider.StreamChunk;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.function.Consumer;
 
 public final class OpenAiProvider implements LlmProvider {
@@ -23,7 +22,7 @@ public final class OpenAiProvider implements LlmProvider {
 
     public OpenAiProvider(AppConfig config) {
         this(config, HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(config.timeouts().connectSeconds()))
+            .connectTimeout(config.timeouts().connectDuration())
             .build());
     }
 
