@@ -186,12 +186,13 @@ public record ChatRequest(
 | `new_string` | string | ✅ | 替换为 |
 
 **行为**：
-1. 读全文
-2. 计算 `old_string` 出现次数
-3. 0 次 → `error("old_string not found in <path>")`
-4. >1 次 → `error("old_string matches N locations in <path>; provide more context to make it unique")`
-5. `old_string.equals(new_string)` → `error("no-op: old_string == new_string")`
-6. 唯一匹配 → 替换、写回
+1. 路径不存在 → `error("file not found: <path>")`
+2. 读全文
+3. 计算 `old_string` 出现次数
+4. 0 次 → `error("old_string not found in <path>")`
+5. >1 次 → `error("old_string matches N locations in <path>; provide more context to make it unique")`
+6. `old_string.equals(new_string)` → `error("no-op: old_string == new_string")`
+7. 唯一匹配 → 替换、写回
 
 **不**支持 `replace_all` —— 严格唯一匹配。
 
@@ -258,7 +259,7 @@ public record ChatRequest(
 **StreamParser 改造**：
 - `content_block_start` 中 `content_block.type=tool_use` → `sink.accept(new ToolUseStart(id, name))`；记录 `currentBlock = TOOL_USE` 携带 `id`
 - `content_block_delta` 中 `delta.type=input_json_delta` → `sink.accept(new ToolUseDelta(id, delta.partial_json))`
-- `content_block_stop` 时若 currentBlock == TOOL_USE → flush accumulated partialJson 解析为 JsonNode，发 `ToolUseEnd(id, name, input)`
+- `content_block_stop` 时若 currentBlock == TOOL_USE → flush accumulated partialJson 解析为 JsonNode，发 `ToolUseEnd(id, name, input)`。**flush 失败（partialJson 非法 JSON）** → 发 `StreamChunk.Error(code="tool_input_invalid", message=...)`，不抛异常
 - `message_delta` 中 `delta.stop_reason=tool_use` → `lastStopReason = "tool_use"`
 - `message_stop` 时 `mapStopReason("tool_use")` → `StopReason.TOOL_USE`（v1 映射成 ERROR 的那条删除）
 
@@ -267,12 +268,15 @@ public record ChatRequest(
 **RequestMapper 改造**：
 - `tools` 非空时，添加 `"tools": [{"type":"function","function":{"name":..,"description":..,"parameters":<input_schema>}}]`
 - 助手消息 wire 格式：`{role:"assistant", content:..或null, tool_calls:[{id,type:"function",function:{name,arguments}}]}`
-- 工具结果回灌：OpenAI 用 `role:"tool"` 多条消息，每条带 `tool_call_id`；REPL 在 `session.appendUser` 时把 ToolResultBlock 拆成多个 `ChatMessage(USER, [ToolResultBlock(...)])`
+- 工具结果回灌：OpenAI 用 `role:"tool"` 多条消息，每条带 `tool_call_id`。**`ChatMessage.Role` 仍是 USER/ASSISTANT 两个**（不引入 TOOL 角色），OpenAI mapper 在序列化时把 `ToolResultBlock` 翻译成 `role:"tool"` + `tool_call_id`；Anthropic mapper 翻译成 `role:"user", content:[{type:"tool_result",...}]`
 
 **StreamParser 改造**：
-- `delta.tool_calls[i].id` 首次出现 → `ToolUseStart(id, delta.tool_calls[i].function.name)`
-- `delta.tool_calls[i].function.arguments` 增量 → `ToolUseDelta(id, partial)`
-- `finish_reason=tool_calls` 时 flush 所有累积 JSON → 多个 `ToolUseEnd`；`MessageEnd(TOOL_USE)`
+- parser 内部维护 `Map<Integer /* tool index */, ToolAccumulator>`，按 tool_calls 数组 index 跟踪每个调用
+- `delta.tool_calls[i].id` 首次出现 → `ToolUseStart(id, name)`；同时初始化 accumulator
+- `delta.tool_calls[i].function.arguments` 增量 → `ToolUseDelta(id, partial)`；累积到该 index 的 accumulator
+- `delta.tool_calls[i].function.name` 增量（OpenAI 偶发）→ 更新该 index 累积器的 name
+- `finish_reason=tool_calls` 时按 index 顺序 flush 所有 accumulator：partialJson → JsonNode 解析；解析失败则该 index 改发 `StreamChunk.Error("tool_input_invalid", ...)`，其它继续
+- 全部 flush 完后 `MessageEnd(TOOL_USE)`
 
 ---
 
@@ -307,10 +311,12 @@ void runOneTurn() {
             return;
         }
         var tu = accumulated.toolUses.get(0);
-        session.appendAssistant(List.of(
-            new TextBlock(accumulated.text),
-            new ToolUseBlock(tu.id(), tu.name(), tu.input())
-        ));
+        var assistantBlocks = new ArrayList<ContentBlock>();
+        if (!accumulated.text.isEmpty()) {
+            assistantBlocks.add(new TextBlock(accumulated.text));
+        }
+        assistantBlocks.add(new ToolUseBlock(tu.id(), tu.name(), tu.input()));
+        session.appendAssistant(assistantBlocks);
         var result = executor.run(tu.name(), tu.input());
         printer.toolEnd(tu.name(), !result.isError());
         session.appendUser(List.of(new ToolResultBlock(tu.id(), result.content(), result.isError())));
