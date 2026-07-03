@@ -4,11 +4,19 @@ import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.ProviderRegistry;
+import com.maplecode.tool.EditFileTool;
+import com.maplecode.tool.ExecTool;
+import com.maplecode.tool.GlobTool;
+import com.maplecode.tool.GrepTool;
+import com.maplecode.tool.ReadFileTool;
+import com.maplecode.tool.ToolRegistry;
+import com.maplecode.tool.WriteFileTool;
 import com.maplecode.ui.ReplLoop;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 public final class App {
 
@@ -24,7 +32,15 @@ public final class App {
         }
         AppConfig config = ConfigLoader.load(configPath);
         LlmProvider provider = new ProviderRegistry().create(config);
-        ReplLoop repl = ReplLoop.fromConfig(config, provider);
+        ToolRegistry registry = new ToolRegistry(List.of(
+            new ReadFileTool(),
+            new WriteFileTool(),
+            new EditFileTool(),
+            new ExecTool(),
+            new GlobTool(),
+            new GrepTool()
+        ));
+        ReplLoop repl = ReplLoop.fromConfig(config, provider, registry);
         repl.run();
     }
 
