@@ -11,6 +11,7 @@ public final class AnthropicStreamParser {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    private boolean errored = false;
     private BlockType currentBlock = BlockType.NONE;
     private String lastStopReason = null;
     private String currentToolUseId = null;
@@ -20,6 +21,7 @@ public final class AnthropicStreamParser {
     private enum BlockType { NONE, THINKING, TEXT, TOOL_USE }
 
     public void reset() {
+        errored = false;
         currentBlock = BlockType.NONE;
         lastStopReason = null;
         currentToolUseId = null;
@@ -28,6 +30,7 @@ public final class AnthropicStreamParser {
     }
 
     public void feed(SseEvent event, Consumer<StreamChunk> sink) {
+        if (errored) return;
         String type = event.eventType();
         if (type.equals("message_start")) {
             currentBlock = BlockType.NONE;
@@ -107,6 +110,7 @@ public final class AnthropicStreamParser {
             String code = node.path("error").path("type").asText("unknown");
             String msg = node.path("error").path("message").asText("");
             sink.accept(new StreamChunk.Error(code, msg));
+            errored = true;
             return;
         }
         // ping / 未知 —— 忽略
