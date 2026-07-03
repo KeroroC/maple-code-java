@@ -110,7 +110,7 @@ public final class ReplLoop {
 
             if (acc.stopReason != StreamChunk.StopReason.TOOL_USE) {
                 if (!acc.text.isEmpty()) {
-                    session.appendAssistant(List.of(new ContentBlock.TextBlock(acc.text)));
+                    session.appendAssistant(List.of(new ContentBlock.TextBlock(acc.text.toString())));
                 }
                 return;
             }
@@ -124,7 +124,7 @@ public final class ReplLoop {
             // 把 assistant 这一轮的 text + tool_use 都写入 session
             var assistantBlocks = new ArrayList<ContentBlock>();
             if (!acc.text.isEmpty()) {
-                assistantBlocks.add(new ContentBlock.TextBlock(acc.text));
+                assistantBlocks.add(new ContentBlock.TextBlock(acc.text.toString()));
             }
             assistantBlocks.add(new ContentBlock.ToolUseBlock(tu.id(), tu.name(), tu.input()));
             session.appendAssistant(assistantBlocks);
