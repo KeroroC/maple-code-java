@@ -8,6 +8,7 @@ public final class StreamPrinter {
     private static final String DIM   = "\033[90m";
     private static final String BOLD  = "\033[1m";
     private static final String RED   = "\033[31m";
+    private static final String GREEN = "\033[32m";
 
     private final PrintStream out;
 
@@ -62,5 +63,29 @@ public final class StreamPrinter {
     /** 打印空行，用于分隔对话轮次 */
     public void newline() {
         out.println();
+    }
+
+    /** 工具开始。灰字行：⚙ read_file /tmp/x */
+    public void toolStart(String name, String argSummary) {
+        if (argSummary == null || argSummary.isEmpty()) {
+            out.println(DIM + "⚙ " + name + RESET);
+        } else {
+            out.println(DIM + "⚙ " + name + " " + argSummary + RESET);
+        }
+        out.flush();
+    }
+
+    /** 工具结束。绿字 ✓ 或红字 ✗ */
+    public void toolEnd(String name, boolean success, String errorDetail) {
+        if (success) {
+            out.println(GREEN + "✓ " + name + RESET);
+        } else {
+            String msg = errorDetail == null || errorDetail.isEmpty() ? "" : ": " + errorDetail;
+            // 多行错误只取第一行，避免刷屏
+            int nl = msg.indexOf('\n');
+            if (nl > 0) msg = msg.substring(0, nl);
+            out.println(RED + "✗ " + name + msg + RESET);
+        }
+        out.flush();
     }
 }
