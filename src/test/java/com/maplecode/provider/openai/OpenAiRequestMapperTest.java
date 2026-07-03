@@ -22,7 +22,7 @@ class OpenAiRequestMapperTest {
     void minimal_request_with_user_text() {
         var req = new ChatRequest("gpt-5", null,
             List.of(new ChatMessage(ChatMessage.Role.USER,
-                List.of(new ContentBlock.TextBlock("hi")))), null);
+                List.of(new ContentBlock.TextBlock("hi")))), null, null);
 
         HttpRequest http = mapper.toHttpRequest(req, "https://api.openai.com/v1", "sk-test", Duration.ofSeconds(30));
         assertEquals(URI.create("https://api.openai.com/v1/chat/completions"), http.uri());
@@ -42,7 +42,7 @@ class OpenAiRequestMapperTest {
     void system_prompt_emits_system_role_message() {
         var req = new ChatRequest("gpt-5", "be terse",
             List.of(new ChatMessage(ChatMessage.Role.USER,
-                List.of(new ContentBlock.TextBlock("hi")))), null);
+                List.of(new ContentBlock.TextBlock("hi")))), null, null);
         String body = mapper.toJsonBody(req);
         assertTrue(body.contains("\"role\":\"system\",\"content\":\"be terse\""));
     }
@@ -53,7 +53,7 @@ class OpenAiRequestMapperTest {
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u1"))),
             new ChatMessage(ChatMessage.Role.ASSISTANT, List.of(new ContentBlock.TextBlock("a1"))),
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u2")))
-        ), null);
+        ), null, null);
         String body = mapper.toJsonBody(req);
         int u1 = body.indexOf("\"u1\"");
         int a1 = body.indexOf("\"a1\"");

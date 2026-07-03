@@ -25,7 +25,7 @@ class AnthropicRequestMapperTest {
     void minimal_request_no_thinking_no_system() {
         var req = new ChatRequest("claude-sonnet-4-6", null,
             List.of(new ChatMessage(ChatMessage.Role.USER,
-                List.of(new ContentBlock.TextBlock("hi")))), null);
+                List.of(new ContentBlock.TextBlock("hi")))), null, null);
 
         HttpRequest http = mapper.toHttpRequest(req, "https://api.anthropic.com", "sk-test", Duration.ofSeconds(30));
         assertEquals(URI.create("https://api.anthropic.com/v1/messages"), http.uri());
@@ -53,7 +53,7 @@ class AnthropicRequestMapperTest {
         var req = new ChatRequest("claude-opus-4-7", "be terse",
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))),
-            new ThinkingConfig(Type.ADAPTIVE, null, Effort.HIGH));
+            new ThinkingConfig(Type.ADAPTIVE, null, Effort.HIGH), null);
 
         String body = mapper.toJsonBody(req);
         assertTrue(body.contains("\"thinking\":{\"type\":\"adaptive\"}"));
@@ -67,7 +67,7 @@ class AnthropicRequestMapperTest {
         var req = new ChatRequest("claude-sonnet-4-6", null,
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))),
-            new ThinkingConfig(Type.ENABLED, 10000, null));
+            new ThinkingConfig(Type.ENABLED, 10000, null), null);
 
         String body = mapper.toJsonBody(req);
         assertTrue(body.contains("\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":10000}"));
@@ -81,7 +81,7 @@ class AnthropicRequestMapperTest {
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u1"))),
             new ChatMessage(ChatMessage.Role.ASSISTANT, List.of(new ContentBlock.TextBlock("a1"))),
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u2")))
-        ), null);
+        ), null, null);
         String body = mapper.toJsonBody(req);
         int u1 = body.indexOf("\"u1\"");
         int a1 = body.indexOf("\"a1\"");
