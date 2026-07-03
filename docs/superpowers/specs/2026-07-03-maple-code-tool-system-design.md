@@ -84,15 +84,15 @@ public sealed interface StreamChunk
 ### 2.4 `Tool` 接口与 `ToolResult`（新包 `com.maplecode.tool`）
 
 ```java
-public sealed interface Tool
-    permits ReadFileTool, WriteFileTool, EditFileTool,
-            ExecTool, GlobTool, GrepTool {
-
+public interface Tool {
     String name();
     String description();
     JsonNode inputSchema();       // JSON Schema
     ToolResult execute(JsonNode args, ToolContext ctx);
 }
+```
+
+> **实现备注**：原计划 `sealed permits ReadFileTool/.../GrepTool`，但 Java 不允许 `sealed` 接口被匿名类实现，而测试需要 mock 工具实例。改为非 sealed；6 个具体类仍在 `App.java` 集中注册（新增工具时 App 编译失败提醒）。
 
 public record ToolResult(String content, boolean isError) {
     public static ToolResult ok(String content)           { return new ToolResult(content, false); }
