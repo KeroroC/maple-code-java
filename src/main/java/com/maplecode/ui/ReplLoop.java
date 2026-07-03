@@ -66,6 +66,9 @@ public final class ReplLoop {
                         case StreamChunk.MessageStart s    -> { /* 空操作 */ }
                         case StreamChunk.MessageEnd e      -> printer.endAssistant();
                         case StreamChunk.Error e           -> printer.error(e.code() + ": " + e.message());
+                        case StreamChunk.ToolUseStart d    -> { /* TODO Task 22 */ }
+                        case StreamChunk.ToolUseDelta d    -> { /* TODO Task 22 */ }
+                        case StreamChunk.ToolUseEnd d      -> { /* TODO Task 22 */ }
                     }
                 });
                 if (textBuf.length() > 0) session.appendAssistant(textBuf.toString());

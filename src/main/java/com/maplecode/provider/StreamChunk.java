@@ -1,5 +1,7 @@
 package com.maplecode.provider;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 /**
  * 流式响应中所有可能的事件类型。
  *
@@ -13,7 +15,10 @@ public sealed interface StreamChunk
             StreamChunk.ThinkingDelta,
             StreamChunk.MessageStart,
             StreamChunk.MessageEnd,
-            StreamChunk.Error {
+            StreamChunk.Error,
+            StreamChunk.ToolUseStart,
+            StreamChunk.ToolUseDelta,
+            StreamChunk.ToolUseEnd {
 
     record TextDelta(String text) implements StreamChunk {}
     record ThinkingDelta(String text) implements StreamChunk {}
@@ -21,5 +26,18 @@ public sealed interface StreamChunk
     record MessageEnd(StopReason reason) implements StreamChunk {}
     record Error(String code, String message) implements StreamChunk {}
 
-    enum StopReason { END_TURN, MAX_TOKENS, STOP, ERROR }
+    /**
+     * 流式 tool_use 的三段拼装：
+     *   ToolUseStart  → 工具被声明（id + name）
+     *   ToolUseDelta  → 参数 JSON 碎片（partialJson）
+     *   ToolUseEnd    → 工具参数完整，input 是解析后的 JsonNode
+     *
+     * Anthropic 的 content_block_start/delta/stop 拆成这三段。
+     * OpenAI 的 delta.tool_calls 同构映射（按 tool_calls 数组 index 跟踪）。
+     */
+    record ToolUseStart(String id, String name) implements StreamChunk {}
+    record ToolUseDelta(String id, String partialJson) implements StreamChunk {}
+    record ToolUseEnd(String id, String name, JsonNode input) implements StreamChunk {}
+
+    enum StopReason { END_TURN, MAX_TOKENS, STOP, ERROR, TOOL_USE }
 }
