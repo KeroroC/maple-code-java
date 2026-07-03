@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.maplecode.provider.ChatRequest;
+import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.ThinkingConfig;
 
 import java.net.URI;
@@ -43,9 +44,7 @@ public final class AnthropicRequestMapper {
 
             ArrayNode msgs = root.putArray("messages");
             for (var m : req.messages()) {
-                msgs.add(JSON.createObjectNode()
-                    .put("role", m.role().name().toLowerCase())
-                    .put("content", m.content()));
+                msgs.add(encodeMessage(m));
             }
 
             if (req.thinking() != null) {
@@ -64,9 +63,45 @@ public final class AnthropicRequestMapper {
                 }
             }
 
+            // tools 数组 —— Task 17 完整实现；本任务先留接口位置
+            if (req.tools() != null && !req.tools().isEmpty()) {
+                ArrayNode toolsArr = root.putArray("tools");
+                for (var tool : req.tools()) {
+                    ObjectNode tn = toolsArr.addObject();
+                    tn.put("name", tool.name());
+                    tn.put("description", tool.description());
+                    tn.set("input_schema", tool.inputSchema());
+                }
+            }
+
             return JSON.writeValueAsString(root);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("failed to serialize Anthropic request", e);
         }
+    }
+
+    private ObjectNode encodeMessage(com.maplecode.provider.ChatMessage m) {
+        ObjectNode msg = JSON.createObjectNode();
+        msg.put("role", m.role().name().toLowerCase());
+
+        ArrayNode content = msg.putArray("content");
+        for (var block : m.blocks()) {
+            if (block instanceof ContentBlock.TextBlock tb) {
+                content.addObject().put("type", "text").put("text", tb.text());
+            } else if (block instanceof ContentBlock.ToolUseBlock tu) {
+                ObjectNode b = content.addObject();
+                b.put("type", "tool_use");
+                b.put("id", tu.id());
+                b.put("name", tu.name());
+                b.set("input", tu.input());
+            } else if (block instanceof ContentBlock.ToolResultBlock tr) {
+                ObjectNode b = content.addObject();
+                b.put("type", "tool_result");
+                b.put("tool_use_id", tr.toolUseId());
+                b.put("content", tr.content());
+                b.put("is_error", tr.isError());
+            }
+        }
+        return msg;
     }
 }
