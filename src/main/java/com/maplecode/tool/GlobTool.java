@@ -46,7 +46,7 @@ public final class GlobTool implements Tool {
         try (Stream<Path> stream = Files.walk(cwd)) {
             stream
                 .filter(Files::isRegularFile)
-                .filter(matcher::matches)
+                .filter(p -> matcher.matches(cwd.relativize(p)))
                 .sorted(Comparator.comparing(Path::toString))
                 .forEach(matches::add);
         } catch (IOException e) {

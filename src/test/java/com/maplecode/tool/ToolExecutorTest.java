@@ -66,7 +66,8 @@ class ToolExecutorTest {
     void run_passes_args_and_ctx_to_tool() {
         var t = mk("check", (a, c) -> {
             assertEquals("hi", a.path("x").asText());
-            assertEquals("/tmp", c.cwd().toString());
+            // ToolExecutor creates its own ToolContext with cwd = System.getProperty("user.dir")
+            assertEquals(System.getProperty("user.dir"), c.cwd().toString());
             return ToolResult.ok("");
         });
         var exec = new ToolExecutor(new ToolRegistry(List.of(t)));

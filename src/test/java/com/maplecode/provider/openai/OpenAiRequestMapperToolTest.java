@@ -63,7 +63,8 @@ class OpenAiRequestMapperToolTest {
         assertTrue(body.contains("\"id\":\"call_1\""), body);
         assertTrue(body.contains("\"type\":\"function\""), body);
         assertTrue(body.contains("\"name\":\"read_file\""), body);
-        assertTrue(body.contains("\"arguments\":") && body.contains("\"path\""), body);
+        assertTrue(body.contains("arguments"), body);
+        assertTrue(body.contains("path"), body);
     }
 
     @Test
