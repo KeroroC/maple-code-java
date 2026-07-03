@@ -1551,9 +1551,10 @@ public final class ReadFileTool implements Tool {
 
         StringBuilder sb = new StringBuilder();
         int lineNoWidth = String.valueOf(end).length();
-        // 简单右对齐——用 String.format
+        // 简单右对齐——用 String.format；最小宽度 4，文件大时跟着 lineNoWidth 走
+        int width = Math.max(4, lineNoWidth);
         for (int i = start; i < end; i++) {
-            sb.append(String.format("%" + Math.max(6, lineNoWidth) + "d\t%s%n", i + 1, allLines.get(i)));
+            sb.append(String.format("%" + width + "d\t%s%n", i + 1, allLines.get(i)));
         }
         // 字节数截断：粗略估算（UTF-8 字节 ≈ 字符数对 ASCII；中文会超，这里只防全 ASCII 大文件）
         String out = sb.toString();
