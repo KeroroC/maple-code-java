@@ -2580,7 +2580,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
-import com.maplecode.provider.LlmProvider;  // unused
 import com.maplecode.tool.Tool;
 import com.maplecode.tool.ToolContext;
 import com.maplecode.tool.ToolResult;
