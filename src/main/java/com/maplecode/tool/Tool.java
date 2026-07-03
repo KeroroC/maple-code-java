@@ -6,16 +6,13 @@ import com.fasterxml.jackson.databind.JsonNode;
  * 工具的统一接口。Provider 不知道工具语义；REPL/ToolExecutor
  * 通过这个接口发现工具并执行。
  *
- * sealed permits 列具体工具类——这样 ToolRegistry 在做异构 List 时
- * 类型已知，且新增工具时所有 switch / 注入点会编译失败被强制更新。
+ * 历史上此接口声明为 sealed permits ReadFileTool/.../GrepTool，但
+ * Java sealed 接口不允许匿名类实现——这会阻碍测试用具名 mock。
+ * 由于本项目对 Tool 没有 `switch (tool)` 站，sealed 的穷尽检查
+ * 没有实际收益，所以改为非 sealed。Tool 的 6 个具体类仍在
+ * App 里集中注册（新增工具时 App.java 编译失败提醒）。
  */
-public sealed interface Tool
-    permits ReadFileTool,
-            WriteFileTool,
-            EditFileTool,
-            ExecTool,
-            GlobTool,
-            GrepTool {
+public interface Tool {
 
     /** 模型在 tool_use 块里写的工具名。 */
     String name();
