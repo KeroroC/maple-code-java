@@ -63,12 +63,24 @@ class ChatSessionTest {
     }
 
     @Test
-    void toRequest_passes_through_tools_when_provided() {
+    void toRequest_3arg_passes_null_tools() {
         var session = new ChatSession();
         session.appendUserText("hi");
-        // 传 null tools 走原 3 参重载
+        // 3 参重载固定传 null
         ChatRequest req = session.toRequest("m", null, null);
         assertEquals(null, req.tools());
+    }
+
+    @Test
+    void toRequest_4arg_passes_tools_through() {
+        var session = new ChatSession();
+        session.appendUserText("hi");
+        // 4 参重载把 tools 透传；null 也接受
+        ChatRequest req = session.toRequest("m", null, null, null);
+        assertEquals(null, req.tools());
+        // 4 参重载把空列表也透传
+        ChatRequest req2 = session.toRequest("m", null, null, List.of());
+        assertEquals(List.of(), req2.tools());
     }
 
     @Test

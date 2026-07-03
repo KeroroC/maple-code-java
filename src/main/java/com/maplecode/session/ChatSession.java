@@ -20,12 +20,16 @@ public final class ChatSession {
         appendUser(List.of(new ContentBlock.TextBlock(text)));
     }
 
-    /** 添 user 消息。 */
+    /**
+     * 添加 user 消息。会复制 blocks 以防外部修改影响 session 内部状态。
+     */
     public void appendUser(List<ContentBlock> blocks) {
         messages.add(new ChatMessage(Role.USER, List.copyOf(blocks)));
     }
 
-    /** 添 assistant 消息。 */
+    /**
+     * 添加 assistant 消息。会复制 blocks 以防外部修改影响 session 内部状态。
+     */
     public void appendAssistant(List<ContentBlock> blocks) {
         messages.add(new ChatMessage(Role.ASSISTANT, List.copyOf(blocks)));
     }
