@@ -9,5 +9,5 @@ public record ChatRequest(
     String systemPrompt,      // nullable
     List<ChatMessage> messages,
     ThinkingConfig thinking,  // nullable
-    List<Tool> tools          // nullable；v1 旧测试传 null 也能跑
+    List<Tool> tools          // nullable；null = no tools available, mappers coerce to empty
 ) {}
