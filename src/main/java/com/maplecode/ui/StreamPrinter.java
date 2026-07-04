@@ -1,8 +1,11 @@
 package com.maplecode.ui;
 
-import java.io.PrintStream;
+import com.maplecode.agent.AgentEvent;
 
-public final class StreamPrinter {
+import java.io.PrintStream;
+import java.util.function.Consumer;
+
+public final class StreamPrinter implements Consumer<AgentEvent> {
 
     private static final String RESET = "\033[0m";
     private static final String DIM   = "\033[90m";
@@ -87,5 +90,21 @@ public final class StreamPrinter {
             out.println(RED + "✗ " + name + msg + RESET);
         }
         out.flush();
+    }
+
+    @Override
+    public void accept(AgentEvent event) {
+        switch (event) {
+            case AgentEvent.TextDelta d -> write(d.text());
+            case AgentEvent.ThinkingDelta d -> writeThinking(d.text());
+            case AgentEvent.ToolCallStart s -> toolStart(s.name(), s.argSummary());
+            case AgentEvent.ToolResult r -> toolEnd(r.name(), !r.isError(), r.isError() ? r.content() : null);
+            case AgentEvent.IterationStart i -> { /* silent */ }
+            case AgentEvent.IterationEnd i -> { /* silent */ }
+            case AgentEvent.BatchStart b -> { /* silent */ }
+            case AgentEvent.BatchEnd b -> { /* silent */ }
+            case AgentEvent.ToolCallEnd e -> { /* silent */ }
+            case AgentEvent.AgentStop s -> info("[agent stopped: " + s.reason() + "]");
+        }
     }
 }
