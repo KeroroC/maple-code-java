@@ -21,4 +21,3 @@ public record AgentConfig(
     }
 }
 
-enum PlanMode { NORMAL, PLAN }
