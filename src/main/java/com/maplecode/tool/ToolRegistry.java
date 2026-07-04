@@ -14,6 +14,9 @@ public final class ToolRegistry {
         this.tools = List.copyOf(tools);
         this.byName = new HashMap<>();
         for (var t : this.tools) {
+            if (byName.containsKey(t.name())) {
+                throw new IllegalArgumentException("duplicate tool name: " + t.name());
+            }
             byName.put(t.name(), t);
         }
     }

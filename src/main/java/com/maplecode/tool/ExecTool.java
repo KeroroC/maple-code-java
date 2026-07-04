@@ -93,7 +93,13 @@ public final class ExecTool implements Tool {
         }
         if (output.getBytes(StandardCharsets.UTF_8).length > OUTPUT_MAX_BYTES) {
             byte[] bytes = output.getBytes(StandardCharsets.UTF_8);
-            output = new String(bytes, 0, OUTPUT_MAX_BYTES, StandardCharsets.UTF_8) + "\n[truncated]";
+            String truncated = new String(bytes, 0, OUTPUT_MAX_BYTES, StandardCharsets.UTF_8);
+            // Trim back if we cut a multi-byte character in half
+            while (!truncated.isEmpty()
+                    && truncated.getBytes(StandardCharsets.UTF_8).length > OUTPUT_MAX_BYTES) {
+                truncated = truncated.substring(0, truncated.length() - 1);
+            }
+            output = truncated + "\n[truncated]";
         }
         if (exit == 0) return ToolResult.ok(output);
         return ToolResult.error("exit=" + exit + (output.isEmpty() ? "" : "\n" + output));

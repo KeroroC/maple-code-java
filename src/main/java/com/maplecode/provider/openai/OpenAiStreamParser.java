@@ -19,6 +19,7 @@ public final class OpenAiStreamParser {
     private static class ToolAcc {
         String id;
         String name;
+        boolean started;
         StringBuilder args = new StringBuilder();
     }
 
@@ -78,6 +79,12 @@ public final class OpenAiStreamParser {
                 if (name != null && !name.isEmpty()) {
                     acc.name = name;
                 }
+                // Emit ToolUseStart as soon as we have id + name, so the REPL
+                // can display the tool name during streaming (matches Anthropic behaviour).
+                if (acc.id != null && acc.name != null && !acc.started) {
+                    sink.accept(new StreamChunk.ToolUseStart(acc.id, acc.name));
+                    acc.started = true;
+                }
                 String args = tc.path("function").path("arguments").asText(null);
                 if (args != null && !args.isEmpty() && acc.id != null) {
                     acc.args.append(args);
@@ -108,8 +115,10 @@ public final class OpenAiStreamParser {
         for (var entry : toolAccs.entrySet()) {
             ToolAcc acc = entry.getValue();
             if (acc.id == null) continue;  // 没 id 视为无效
-            // 先发 Start（如果还没发）
-            sink.accept(new StreamChunk.ToolUseStart(acc.id, acc.name == null ? "" : acc.name));
+            // 发 Start（如果流式阶段还没发过）
+            if (!acc.started) {
+                sink.accept(new StreamChunk.ToolUseStart(acc.id, acc.name == null ? "" : acc.name));
+            }
             JsonNode input;
             try {
                 input = acc.args.length() == 0

@@ -95,7 +95,11 @@ public final class ReadFileTool implements Tool {
     }
 
     static Path resolvePath(String p, Path cwd) {
-        if (p.startsWith("/") || p.startsWith("~")) return Path.of(p);
+        if (p.startsWith("/")) return Path.of(p);
+        if (p.equals("~")) return Path.of(System.getProperty("user.home"));
+        if (p.startsWith("~/")) {
+            return Path.of(System.getProperty("user.home"), p.substring(2));
+        }
         return Path.of(cwd.toString(), p);
     }
 

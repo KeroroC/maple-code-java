@@ -23,6 +23,8 @@ import java.util.List;
 
 public final class ReplLoop {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final AppConfig config;
     private final LlmProvider provider;
     private final StreamPrinter printer;
@@ -173,7 +175,7 @@ public final class ReplLoop {
         String partial = acc.pendingToolJson.toString();
         if (partial.isEmpty()) return "";
         try {
-            JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(partial);
+            JsonNode node = JSON.readTree(partial);
             var path = node.path("path");
             if (!path.isMissingNode()) return path.asText();
             var cmd = node.path("command");
