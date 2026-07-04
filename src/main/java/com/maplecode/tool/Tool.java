@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 /**
  * 工具的统一接口。Provider 不知道工具语义；REPL/ToolExecutor
  * 通过这个接口发现工具并执行。
- *
+ * <p>
  * 历史上此接口声明为 sealed permits ReadFileTool/.../GrepTool，但
  * Java sealed 接口不允许匿名类实现——这会阻碍测试用具名 mock。
  * 由于本项目对 Tool 没有 `switch (tool)` 站，sealed 的穷尽检查
