@@ -94,4 +94,26 @@ class ChatSessionTest {
         List<ChatMessage> msgs = session.toRequest("m", null, null).messages();
         assertEquals(1, msgs.get(0).blocks().size());
     }
+
+    @Test
+    void sizeAndGetExposeInternalList() {
+        var s = new ChatSession();
+        assertEquals(0, s.size());
+        s.appendUserText("hi");
+        s.appendAssistant(List.of(new ContentBlock.TextBlock("hello")));
+        assertEquals(2, s.size());
+        assertEquals(ChatMessage.Role.USER, s.get(0).role());
+        assertEquals("hi", ((ContentBlock.TextBlock) s.get(0).blocks().get(0)).text());
+        assertEquals(ChatMessage.Role.ASSISTANT, s.get(1).role());
+        assertEquals("hello", ((ContentBlock.TextBlock) s.get(1).blocks().get(0)).text());
+    }
+
+    @Test
+    void clearResetsSize() {
+        var s = new ChatSession();
+        s.appendUserText("hi");
+        assertEquals(1, s.size());
+        s.clear();
+        assertEquals(0, s.size());
+    }
 }

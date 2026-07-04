@@ -34,6 +34,14 @@ public final class ChatSession {
         messages.add(new ChatMessage(Role.ASSISTANT, List.copyOf(blocks)));
     }
 
+    public int size() {
+        return messages.size();
+    }
+
+    public ChatMessage get(int i) {
+        return messages.get(i);
+    }
+
     public void clear() {
         messages.clear();
     }
