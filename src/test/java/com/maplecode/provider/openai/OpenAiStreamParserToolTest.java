@@ -37,6 +37,7 @@ class OpenAiStreamParserToolTest {
         // 结束
         parser.feed(ev(
             "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}"), c);
+        parser.feed(ev("[DONE]"), c);
 
         long starts = out.stream().filter(c2 -> c2 instanceof StreamChunk.ToolUseStart).count();
         long deltas = out.stream().filter(c2 -> c2 instanceof StreamChunk.ToolUseDelta).count();
@@ -72,6 +73,7 @@ class OpenAiStreamParserToolTest {
                 + "{\"index\":0,\"function\":{\"arguments\":\"{}\"}},"
                 + "{\"index\":1,\"function\":{\"arguments\":\"{}\"}}"
                 + "]},\"finish_reason\":\"tool_calls\"}]}"), c);
+        parser.feed(ev("[DONE]"), c);
 
         long starts = out.stream().filter(c2 -> c2 instanceof StreamChunk.ToolUseStart).count();
         long ends = out.stream().filter(c2 -> c2 instanceof StreamChunk.ToolUseEnd).count();

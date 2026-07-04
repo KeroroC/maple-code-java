@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maplecode.http.SseStreamReader.SseEvent;
 import com.maplecode.provider.StreamChunk;
+import com.maplecode.provider.TokenUsage;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,6 +15,8 @@ public final class OpenAiStreamParser {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private boolean ended = false;
+    private TokenUsage lastUsage;
+    private StreamChunk.StopReason pendingReason;
     private final Map<Integer, ToolAcc> toolAccs = new LinkedHashMap<>();
 
     private static class ToolAcc {
@@ -25,25 +28,43 @@ public final class OpenAiStreamParser {
 
     public void reset() {
         ended = false;
+        lastUsage = null;
+        pendingReason = null;
         toolAccs.clear();
     }
 
     public void feed(SseEvent event, Consumer<StreamChunk> sink) {
-        if (ended) return;
         String data = event.data();
         if (data == null) return;
+
+        // [DONE] 结束信号：flush 工具 + 发 MessageEnd
         if (data.equals("[DONE]")) {
+            if (ended) return;
             flushTools(sink);
-            sink.accept(new StreamChunk.MessageEnd(StreamChunk.StopReason.STOP, null));
+            sink.accept(new StreamChunk.MessageEnd(
+                pendingReason != null ? pendingReason : StreamChunk.StopReason.STOP,
+                lastUsage));
             ended = true;
             return;
         }
+
         JsonNode node;
         try {
             node = JSON.readTree(data);
         } catch (Exception e) {
             return;
         }
+
+        // 提取 usage（OpenAI 在最后一个 chunk 里带 choices:[] + usage:{...}）
+        // 必须在 ended 检查之前，因为 usage chunk 可能在 finish_reason 之后到达
+        JsonNode usage = node.path("usage");
+        if (!usage.isMissingNode() && usage.has("prompt_tokens")) {
+            lastUsage = new TokenUsage(
+                usage.path("prompt_tokens").asInt(0),
+                usage.path("completion_tokens").asInt(0));
+        }
+
+        if (ended) return;
 
         if (node.has("error")) {
             JsonNode err = node.path("error");
@@ -54,7 +75,15 @@ public final class OpenAiStreamParser {
         }
 
         JsonNode choices = node.path("choices");
-        if (!choices.isArray() || choices.isEmpty()) return;
+        if (!choices.isArray() || choices.isEmpty()) {
+            // choices 为空的 usage chunk：如果已有 pendingReason 则发出 MessageEnd
+            if (pendingReason != null) {
+                flushTools(sink);
+                sink.accept(new StreamChunk.MessageEnd(pendingReason, lastUsage));
+                ended = true;
+            }
+            return;
+        }
         JsonNode choice0 = choices.get(0);
         JsonNode delta = choice0.path("delta");
 
@@ -99,15 +128,14 @@ public final class OpenAiStreamParser {
             if (finish.equals("tool_calls")) {
                 flushTools(sink);
             }
-            StreamChunk.StopReason reason = switch (finish) {
+            pendingReason = switch (finish) {
                 case "stop"        -> StreamChunk.StopReason.STOP;
                 case "length"      -> StreamChunk.StopReason.MAX_TOKENS;
                 case "error"       -> StreamChunk.StopReason.ERROR;
                 case "tool_calls"  -> StreamChunk.StopReason.TOOL_USE;
                 default            -> StreamChunk.StopReason.STOP;
             };
-            sink.accept(new StreamChunk.MessageEnd(reason, null));
-            ended = true;
+            // 不立即发 MessageEnd —— 等 usage chunk 或 [DONE] 携带 TokenUsage
         }
     }
 

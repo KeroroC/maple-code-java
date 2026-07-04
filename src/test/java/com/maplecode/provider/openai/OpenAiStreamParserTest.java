@@ -38,7 +38,8 @@ class OpenAiStreamParserTest {
     @Test
     void finish_reason_emits_message_end() {
         var chunks = feed(
-            "{\"choices\":[{\"delta\":{\"content\":\"x\"},\"finish_reason\":\"stop\",\"index\":0}]}"
+            "{\"choices\":[{\"delta\":{\"content\":\"x\"},\"finish_reason\":\"stop\",\"index\":0}]}",
+            "[DONE]"
         );
         assertEquals(2, chunks.size());
         assertInstanceOf(StreamChunk.TextDelta.class, chunks.get(0));
@@ -78,7 +79,8 @@ class OpenAiStreamParserTest {
     @Test
     void finish_reason_length_maps_to_max_tokens() {
         var chunks = feed(
-            "{\"choices\":[{\"delta\":{},\"finish_reason\":\"length\",\"index\":0}]}"
+            "{\"choices\":[{\"delta\":{},\"finish_reason\":\"length\",\"index\":0}]}",
+            "[DONE]"
         );
         assertEquals(StreamChunk.StopReason.MAX_TOKENS,
             ((StreamChunk.MessageEnd) chunks.get(0)).reason());

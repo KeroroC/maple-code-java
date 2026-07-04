@@ -34,6 +34,10 @@ public final class OpenAiRequestMapper {
             root.put("model", req.model());
             root.put("stream", true);
 
+            // 请求 OpenAI 在流式末尾返回 usage 统计
+            ObjectNode streamOptions = root.putObject("stream_options");
+            streamOptions.put("include_usage", true);
+
             // thinking 静默丢弃 —— v1 的 Chat Completions 没有这个字段
             // （后续可接到 o1 的 reasoning_effort）
 
