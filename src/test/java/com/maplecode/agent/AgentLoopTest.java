@@ -279,4 +279,71 @@ class AgentLoopTest {
         assertEquals(StreamChunk.StopReason.PROVIDER_ERROR, stop.reason());
         assertTrue(stop.detail().contains("network down"));
     }
+
+    @Test
+    void planModePassesOnlyReadOnlyTools() {
+        var chunks = List.<StreamChunk>of(
+            new StreamChunk.TextDelta("plan"),
+            new StreamChunk.MessageEnd(StreamChunk.StopReason.END_TURN, null)
+        );
+
+        // Spy provider to capture the ChatRequest
+        var capturedReq = new java.util.concurrent.atomic.AtomicReference<com.maplecode.provider.ChatRequest>();
+        var spyProvider = new LlmProvider() {
+            public void stream(com.maplecode.provider.ChatRequest req,
+                               java.util.function.Consumer<StreamChunk> sink) {
+                capturedReq.set(req);
+                for (var c : chunks) sink.accept(c);
+            }
+        };
+
+        var registry = new ToolRegistry(List.of(
+            noopTool("read_file", ToolResult.ok("x")),
+            noopTool("write_file", ToolResult.ok("x"))));
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var cfg = new AgentConfig(25, 3, PlanMode.PLAN);
+        var agent = new AgentLoop(spyProvider, registry, executor, session, cfg);
+
+        var events = new ArrayList<AgentEvent>();
+        agent.run("plan this", events::add);
+
+        var tools = capturedReq.get().tools();
+        assertNotNull(tools);
+        assertEquals(1, tools.size());
+        assertEquals("read_file", tools.get(0).name());
+    }
+
+    @Test
+    void planModeRejectsUnsafeToolAtExecutorLevel() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var chunks1 = List.<StreamChunk>of(
+            new StreamChunk.ToolUseStart("t1", "write_file"),
+            new StreamChunk.ToolUseEnd("t1", "write_file", mapper.readTree("{}")),
+            new StreamChunk.MessageEnd(StreamChunk.StopReason.TOOL_USE, null)
+        );
+        var chunks2 = List.<StreamChunk>of(
+            new StreamChunk.TextDelta("ok"),
+            new StreamChunk.MessageEnd(StreamChunk.StopReason.END_TURN, null)
+        );
+        var provider = new FakeLlmProvider(List.of(chunks1, chunks2));
+        var registry = new ToolRegistry(List.of(
+            noopTool("read_file", ToolResult.ok("x")),
+            noopTool("write_file", ToolResult.ok("wrote"))));
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var cfg = new AgentConfig(25, 3, PlanMode.PLAN);
+        var agent = new AgentLoop(provider, registry, executor, session, cfg);
+
+        var events = new ArrayList<AgentEvent>();
+        agent.run("plan+do", events::add);
+
+        var tr = events.stream()
+            .filter(e -> e instanceof AgentEvent.ToolResult)
+            .map(e -> (AgentEvent.ToolResult) e)
+            .findFirst()
+            .orElseThrow();
+        assertTrue(tr.isError(), "tool should be rejected in PLAN mode");
+        assertTrue(tr.content().contains("write_file"));
+    }
 }

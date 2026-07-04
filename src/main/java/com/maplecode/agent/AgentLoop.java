@@ -52,6 +52,18 @@ public final class AgentLoop {
         StopReason finalStop = StopReason.END_TURN;
         String finalDetail = "assistant finished";
 
+        // PLAN mode: build a read-only executor for defense-in-depth
+        final ToolExecutor effectiveExecutor;
+        if (config.planMode() == PlanMode.PLAN) {
+            var readOnlyReg = new ToolRegistry(
+                registry.all().stream()
+                    .filter(t -> registry.isReadOnly(t.name()))
+                    .toList());
+            effectiveExecutor = new ToolExecutor(readOnlyReg);
+        } else {
+            effectiveExecutor = executor;
+        }
+
         while (iteration < config.maxIterations()) {
             if (cancelled) {
                 finalStop = StopReason.USER_CANCELLED;
@@ -62,7 +74,11 @@ public final class AgentLoop {
             sink.accept(new AgentEvent.IterationStart(iteration));
             ResponseCollector col = new ResponseCollector(sink, registry);
 
-            var req = session.toRequest("test-model", null, null, registry.all());
+            // Wire layer: PLAN mode only exposes read-only tools to the model
+            var tools = (config.planMode() == PlanMode.PLAN)
+                ? registry.readOnly()
+                : registry.all();
+            var req = session.toRequest("test-model", null, null, tools);
 
             try {
                 provider.stream(req, col);
@@ -94,7 +110,7 @@ public final class AgentLoop {
 
                 // Safe tools: parallel execution
                 batch.safe().parallelStream().forEach(u -> {
-                    var r = executeOne(u);
+                    var r = executeOne(u, effectiveExecutor);
                     synchronized (results) {
                         results.add(new ToolResultPayload(u.id(), r));
                     }
@@ -103,7 +119,7 @@ public final class AgentLoop {
 
                 // Unsafe tools: serial execution
                 for (var u : batch.unsafe()) {
-                    var r = executeOne(u);
+                    var r = executeOne(u, effectiveExecutor);
                     results.add(new ToolResultPayload(u.id(), r));
                     sink.accept(new AgentEvent.ToolResult(u.id(), u.name(), r.isError(), r.content()));
                 }
@@ -163,9 +179,9 @@ public final class AgentLoop {
         sink.accept(new AgentEvent.AgentStop(finalStop, finalDetail));
     }
 
-    private ToolResult executeOne(ResponseCollector.ToolUse u) {
+    private ToolResult executeOne(ResponseCollector.ToolUse u, ToolExecutor exec) {
         try {
-            return executor.run(u.name(), u.input());
+            return exec.run(u.name(), u.input());
         } catch (Exception e) {
             return ToolResult.error("internal error: " + e.getClass().getSimpleName());
         }
