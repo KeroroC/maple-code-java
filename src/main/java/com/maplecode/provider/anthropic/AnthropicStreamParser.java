@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maplecode.http.SseStreamReader.SseEvent;
 import com.maplecode.provider.StreamChunk;
+import com.maplecode.provider.TokenUsage;
 
 import java.util.function.Consumer;
 
@@ -14,6 +15,8 @@ public final class AnthropicStreamParser {
     private boolean errored = false;
     private BlockType currentBlock = BlockType.NONE;
     private String lastStopReason = null;
+    private int lastInputTokens = 0;
+    private int lastOutputTokens = 0;
     private String currentToolUseId = null;
     private String currentToolName = null;
     private StringBuilder currentToolJson = new StringBuilder();
@@ -24,6 +27,8 @@ public final class AnthropicStreamParser {
         errored = false;
         currentBlock = BlockType.NONE;
         lastStopReason = null;
+        lastInputTokens = 0;
+        lastOutputTokens = 0;
         currentToolUseId = null;
         currentToolName = null;
         currentToolJson.setLength(0);
@@ -35,9 +40,13 @@ public final class AnthropicStreamParser {
         if (type.equals("message_start")) {
             currentBlock = BlockType.NONE;
             lastStopReason = null;
+            lastInputTokens = 0;
+            lastOutputTokens = 0;
             currentToolUseId = null;
             currentToolName = null;
             currentToolJson.setLength(0);
+            JsonNode node = parse(event.data());
+            lastInputTokens = node.path("message").path("usage").path("input_tokens").asInt(0);
             sink.accept(new StreamChunk.MessageStart());
             return;
         }
@@ -99,10 +108,17 @@ public final class AnthropicStreamParser {
             if (stopReason != null && !stopReason.isEmpty()) {
                 lastStopReason = stopReason;
             }
+            int outputTokens = node.path("usage").path("output_tokens").asInt(0);
+            if (outputTokens > 0) {
+                lastOutputTokens = outputTokens;
+            }
             return;
         }
         if (type.equals("message_stop")) {
-            sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason), null));
+            TokenUsage usage = (lastInputTokens == 0 && lastOutputTokens == 0)
+                ? null
+                : new TokenUsage(lastInputTokens, lastOutputTokens);
+            sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason), usage));
             return;
         }
         if (type.equals("error")) {
