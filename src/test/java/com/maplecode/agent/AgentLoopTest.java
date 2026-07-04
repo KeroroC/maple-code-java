@@ -208,7 +208,7 @@ class AgentLoopTest {
     @Test
     void maxIterationsTriggersStop() throws Exception {
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        var cfg = new AgentConfig(3, 3, com.maplecode.agent.PlanMode.NORMAL);
+        var cfg = new AgentConfig("m", null, null, 3, 3, com.maplecode.agent.PlanMode.NORMAL);
 
         var loopScript = List.<StreamChunk>of(
             new StreamChunk.ToolUseStart("t1", "read_file"),
@@ -248,7 +248,7 @@ class AgentLoopTest {
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
         var agent = new AgentLoop(provider, registry, executor, session,
-            new AgentConfig(25, 3, com.maplecode.agent.PlanMode.NORMAL));
+            new AgentConfig("m", null, null, 25, 3, com.maplecode.agent.PlanMode.NORMAL));
 
         var events = new ArrayList<AgentEvent>();
         agent.run("try unknown", events::add);
@@ -302,7 +302,7 @@ class AgentLoopTest {
             noopTool("write_file", ToolResult.ok("x"))));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var cfg = new AgentConfig(25, 3, PlanMode.PLAN);
+        var cfg = new AgentConfig("m", null, null, 25, 3, PlanMode.PLAN);
         var agent = new AgentLoop(spyProvider, registry, executor, session, cfg);
 
         var events = new ArrayList<AgentEvent>();
@@ -332,7 +332,7 @@ class AgentLoopTest {
             noopTool("write_file", ToolResult.ok("wrote"))));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var cfg = new AgentConfig(25, 3, PlanMode.PLAN);
+        var cfg = new AgentConfig("m", null, null, 25, 3, PlanMode.PLAN);
         var agent = new AgentLoop(provider, registry, executor, session, cfg);
 
         var events = new ArrayList<AgentEvent>();

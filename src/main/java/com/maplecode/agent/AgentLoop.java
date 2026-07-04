@@ -78,7 +78,7 @@ public final class AgentLoop {
             var tools = (config.planMode() == PlanMode.PLAN)
                 ? registry.readOnly()
                 : registry.all();
-            var req = session.toRequest("test-model", null, null, tools);
+            var req = session.toRequest(config.model(), config.systemPrompt(), config.thinking(), tools);
 
             try {
                 provider.stream(req, col);

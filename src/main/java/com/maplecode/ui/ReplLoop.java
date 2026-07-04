@@ -39,7 +39,7 @@ public final class ReplLoop {
         this.registry = registry;
         this.executor = new ToolExecutor(registry);
         this.session = new ChatSession();
-        this.agentConfig = AgentConfig.defaults();
+        this.agentConfig = AgentConfig.fromAppConfig(appConfig);
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig);
     }
 
@@ -92,6 +92,9 @@ public final class ReplLoop {
                     continue;
                 }
                 agentConfig = new AgentConfig(
+                    agentConfig.model(),
+                    agentConfig.systemPrompt(),
+                    agentConfig.thinking(),
                     agentConfig.maxIterations(),
                     agentConfig.maxConsecutiveUnknown(),
                     PlanMode.PLAN);
@@ -114,6 +117,9 @@ public final class ReplLoop {
                 }
                 agent.session().clear();
                 agentConfig = new AgentConfig(
+                    agentConfig.model(),
+                    agentConfig.systemPrompt(),
+                    agentConfig.thinking(),
                     agentConfig.maxIterations(),
                     agentConfig.maxConsecutiveUnknown(),
                     PlanMode.NORMAL);
@@ -127,6 +133,9 @@ public final class ReplLoop {
             if (trimmed.equals("/cancel")) {
                 agent.cancel();
                 agentConfig = new AgentConfig(
+                    agentConfig.model(),
+                    agentConfig.systemPrompt(),
+                    agentConfig.thinking(),
                     agentConfig.maxIterations(),
                     agentConfig.maxConsecutiveUnknown(),
                     PlanMode.NORMAL);
