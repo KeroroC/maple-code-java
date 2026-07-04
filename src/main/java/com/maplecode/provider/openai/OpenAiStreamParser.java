@@ -139,6 +139,18 @@ public final class OpenAiStreamParser {
         }
     }
 
+    /**
+     * Stream 结束后调用。如果 pendingReason 存在但还没 emit MessageEnd
+     * （比如流被截断、没收到 [DONE]），这里兜底 emit。
+     */
+    public void finish(Consumer<StreamChunk> sink) {
+        if (!ended && pendingReason != null) {
+            flushTools(sink);
+            sink.accept(new StreamChunk.MessageEnd(pendingReason, lastUsage));
+            ended = true;
+        }
+    }
+
     private void flushTools(Consumer<StreamChunk> sink) {
         for (var entry : toolAccs.entrySet()) {
             ToolAcc acc = entry.getValue();

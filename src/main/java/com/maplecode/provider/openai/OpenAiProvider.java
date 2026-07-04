@@ -47,6 +47,7 @@ public final class OpenAiProvider implements LlmProvider {
         }
         parser.reset();
         sseReader.read(resp, ev -> parser.feed(ev, sink));
+        parser.finish(sink);
     }
 
     private String readBodyForError(HttpResponse<java.util.stream.Stream<String>> resp) {
