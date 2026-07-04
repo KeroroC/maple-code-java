@@ -38,7 +38,6 @@ public sealed interface AgentEvent
             AgentEvent.ToolResult,
             AgentEvent.IterationStart,
             AgentEvent.IterationEnd,
-            AgentEvent.TokenUsage,
             AgentEvent.BatchStart,
             AgentEvent.BatchEnd,
             AgentEvent.AgentStop {
@@ -51,7 +50,6 @@ public sealed interface AgentEvent
     record IterationStart(int iteration) implements AgentEvent {}
     record IterationEnd(int iteration, StopReason stopReason,
                         List<String> toolUseIds, TokenUsage usage) implements AgentEvent {}
-    record TokenUsage(int inputTokens, int outputTokens) implements AgentEvent {}
     record BatchStart(int safeCount, int unsafeCount) implements AgentEvent {}
     record BatchEnd(int totalTools, int failedTools) implements AgentEvent {}
     record AgentStop(StopReason reason, String detail) implements AgentEvent {}
@@ -60,13 +58,17 @@ public sealed interface AgentEvent
 
 > **sealed 设计**：每个新事件类型添加时，AgentLoop 内 switch、StreamPrinter 渲染 switch、测试断言都必须更新；编译期强制。
 
-### 2.2 `TokenUsage` 与 `StopReason` 扩展
+### 2.2 `TokenUsage`（新增，`com.maplecode.provider`）
 
 ```java
 public record TokenUsage(int inputTokens, int outputTokens) {}
 ```
 
-`StopReason` 增加两个枚举值：
+放在 `provider` 包，与 `StreamChunk` 同层。被 `MessageEnd.usage` 与 `AgentEvent.IterationEnd.usage` 共同引用，避免跨包反向依赖（agent → provider）。
+
+### 2.3 `StreamChunk.StopReason` 扩展
+
+`StopReason` 是 `StreamChunk` 的 nested enum（v2 已定义）。新增 4 个枚举值：
 
 ```java
 public enum StopReason {
@@ -78,7 +80,9 @@ public enum StopReason {
 }
 ```
 
-### 2.3 `StreamChunk.MessageEnd` 加 `usage` 字段
+> 注意：`StopReason` 不另起文件 —— 它是 `StreamChunk.java` 内的 nested enum。
+
+### 2.4 `StreamChunk.MessageEnd` 加 `usage` 字段
 
 ```java
 record MessageEnd(StopReason reason, TokenUsage usage) implements StreamChunk {}
@@ -87,11 +91,11 @@ record MessageEnd(StopReason reason, TokenUsage usage) implements StreamChunk {}
 - `usage` 可空（流里没拿到则 null）
 - v2 所有 `MessageEnd` 构造点（两个 StreamParser 的 `message_stop` / `finish_reason` 分支）必须更新
 
-### 2.4 `Tool` 接口 / `ToolContext` 不变
+### 2.5 `Tool` 接口 / `ToolContext` 不变
 
 v2 已定义。不引入 `isReadOnly()` 方法 —— 工具安全性是注册表属性，由 `ToolRegistry` 集中查询，避免侵入 6 个具体工具类。
 
-### 2.5 `ToolRegistry` 加 `isReadOnly`
+### 2.6 `ToolRegistry` 加 `isReadOnly`
 
 ```java
 public final class ToolRegistry {
@@ -120,7 +124,7 @@ public final class ToolRegistry {
 
 `isReadOnly` 与 `readOnly()` 在 `ToolRegistry` 构造时初始化为常量 `Set<String>{"read_file","glob","grep"}`，无需遍历工具列表。
 
-### 2.6 `AgentConfig`（新增）
+### 2.7 `AgentConfig`（新增）
 
 ```java
 public record AgentConfig(
@@ -143,7 +147,7 @@ public record AgentConfig(
 public enum PlanMode { NORMAL, PLAN }
 ```
 
-### 2.7 `Batch`（内部 helper）
+### 2.8 `Batch`（内部 helper）
 
 ```java
 record Batch(List<ToolUse> safe, List<ToolUse> unsafe) {
@@ -159,7 +163,7 @@ record Batch(List<ToolUse> safe, List<ToolUse> unsafe) {
 }
 ```
 
-### 2.8 `ResponseCollector`（内部 helper）
+### 2.9 `ResponseCollector`（内部 helper）
 
 ```java
 final class ResponseCollector implements Consumer<StreamChunk> {
@@ -215,7 +219,7 @@ final class ResponseCollector implements Consumer<StreamChunk> {
 }
 ```
 
-### 2.9 `AgentLoop`（新增）
+### 2.10 `AgentLoop`（新增）
 
 ```java
 public final class AgentLoop {
@@ -254,7 +258,7 @@ public final class AgentLoop {
             try {
                 provider.stream(req, col);
             } catch (ProviderException e) {
-                sink.accept(new AgentStop(StopReason.PROVIDER_ERROR, e.getMessage()));
+                sink.accept(new AgentEvent.AgentStop(StopReason.PROVIDER_ERROR, e.getMessage()));
                 return;
             }
 
@@ -357,7 +361,7 @@ public final class AgentLoop {
 3. **`MAX_ITERATIONS` 检测**用初始 finalStop 值哨兵
 4. **`ProviderException` 单独 emit**而非 AgentStop 兜底，因为是中途失败不是循环结尾
 
-### 2.10 `AgentCancelledException`（新增）
+### 2.11 `AgentCancelledException`（新增）
 
 `error/AgentCancelledException.java`：
 
@@ -454,27 +458,23 @@ List<Tool> tools = (config.planMode() == PlanMode.PLAN)
 ChatRequest req = session.toRequest(..., tools);
 ```
 
-### 4.5 PLAN 模式下调写工具
+### 4.5 PLAN 模式下的工具执行防御
 
-模型若在 PLAN 状态下调 `write_file`：
-- `ToolExecutor.run` → `registry.get("write_file")` 仍然存在
-- 工具正常执行 —— **设计决策**：PLAN 模式只限制**模型看到的工具清单**，不限制 Registry 本身
-- 理由：保持 ToolExecutor 简单；模型违反计划语义时会写文件，但用户体验是「它真的写了」——这正是 PLAN 的目的：观察，不是执行
+**双层防御**：
 
-**等等，反思**：上面这个决策有问题。如果 PLAN 模式不真正禁掉写工具，模型可能误写文件。修正：
-
-**修订决策**：PLAN 模式把写/执行工具**也**从 ToolRegistry 子集构造时排除 —— 让 ToolExecutor 查不到这些工具，返回 `Unknown tool: write_file (not available in plan mode)`。这样模型自己意识到不能写。
+1. **wire 层**：AgentLoop 在 PLAN 模式时构造 `ChatRequest` 只传 `registry.readOnly()`。模型看不到 `write_file / edit_file / exec`，正常情况不会调它们。
+2. **executor 层**：AgentLoop 在 PLAN 模式时使用临时 `ToolRegistry` 包装（仅含 readOnly 工具），用它构造专用 `ToolExecutor`。即便模型因 prompt injection 或 bug 硬调写工具，`ToolExecutor.run` 也找不到，返回 `ToolResult.error("Unknown tool: write_file (not available in plan mode)")` 回灌。
 
 实现：
 ```java
-// ToolRegistry 不变；AgentLoop 构造临时工具集
-List<Tool> planTools = registry.all().stream()
-    .filter(t -> registry.isReadOnly(t.name()))
-    .toList();
-ChatRequest req = session.toRequest(..., planTools);
+// AgentLoop.run 入口或构造时
+ToolRegistry effectiveRegistry = (config.planMode() == PlanMode.PLAN)
+    ? filterToReadOnly(registry)        // 包装一个只含 readOnly 工具的临时注册表
+    : registry;
+ToolExecutor effectiveExecutor = new ToolExecutor(effectiveRegistry);
 ```
 
-模型 wire 层面就看不到 `write_file`；若它硬编码调（不该发生），`ToolExecutor.run` 找不到 → error。
+`filterToReadOnly` 是 AgentLoop 私有 helper：`new ToolRegistry(registry.all().stream().filter(t -> registry.isReadOnly(t.name())).toList())`。
 
 ### 4.6 `/cancel` 命令
 
@@ -596,8 +596,7 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
             case AgentEvent.ToolCallStart s -> toolStart(s.name(), s.argSummary());
             case AgentEvent.ToolResult r -> toolEnd(r.name(), !r.isError(), r.isError() ? r.content() : null);
             case AgentEvent.IterationStart i -> {} // 静默
-            case AgentEvent.IterationEnd i -> {}   // 静默
-            case AgentEvent.TokenUsage u -> {}     // 静默（v3 不显示，留给未来）
+            case AgentEvent.IterationEnd i -> {}   // 静默（含 usage 字段，v3 不展示）
             case AgentEvent.BatchStart b -> {}     // 静默
             case AgentEvent.BatchEnd b -> {}       // 静默
             case AgentEvent.ToolCallEnd e -> {}    // 静默
@@ -711,13 +710,15 @@ src/main/java/com/maplecode/agent/
 ├── AgentLoop.java
 ├── AgentConfig.java
 ├── AgentEvent.java           (sealed)
-├── TokenUsage.java           (record)
-├── PlanMode.java             (enum)
+├── PlanMode.java             (enum, 与 AgentConfig 同包)
 ├── ResponseCollector.java    (内部 helper)
 └── Batch.java                (内部 helper)
 
+src/main/java/com/maplecode/provider/
+└── TokenUsage.java           (record)
+
 src/main/java/com/maplecode/error/
-└── AgentCancelledException.java
+└── AgentCancelledException.java  (本阶段不抛；占位)
 
 src/test/java/com/maplecode/agent/
 ├── AgentLoopTest.java
@@ -742,10 +743,14 @@ src/test/java/com/maplecode/provider/
 
 ```
 src/main/java/com/maplecode/provider/
-├── StreamChunk.java          ← MessageEnd + TokenUsage usage 字段
-├── StopReason.java           ← + 4 个枚举（MAX_ITERATIONS/CONSECUTIVE_UNKNOWN/PROVIDER_ERROR/USER_CANCELLED）
-├── anthropic/AnthropicStreamParser.java    ← usage 缓存 + MessageEnd 携带 usage
-└── openai/OpenAiStreamParser.java          ← 末尾 usage 解析
+├── StreamChunk.java          ← StopReason + 4 个枚举；MessageEnd + usage 字段
+└── TokenUsage.java           (新增 record；与 StreamChunk 同包)
+
+src/main/java/com/maplecode/provider/anthropic/
+└── AnthropicStreamParser.java    ← usage 缓存 + MessageEnd 携带 usage
+
+src/main/java/com/maplecode/provider/openai/
+└── OpenAiStreamParser.java          ← 末尾 usage 解析
 
 src/main/java/com/maplecode/tool/
 └── ToolRegistry.java         ← + isReadOnly(name) / readOnly()
