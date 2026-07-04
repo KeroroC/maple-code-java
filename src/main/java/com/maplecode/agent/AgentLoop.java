@@ -8,6 +8,7 @@ import com.maplecode.provider.StreamChunk.StopReason;
 import com.maplecode.session.ChatSession;
 import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
+import com.maplecode.tool.ToolResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,10 +62,7 @@ public final class AgentLoop {
             sink.accept(new AgentEvent.IterationStart(iteration));
             ResponseCollector col = new ResponseCollector(sink, registry);
 
-            var req = new ChatRequest(
-                "test-model", null,
-                new ArrayList<>(),  // placeholder: Task 15 replaces with session.toRequest
-                null, registry.all());
+            var req = session.toRequest("test-model", null, null, registry.all());
 
             try {
                 provider.stream(req, col);
@@ -77,13 +75,72 @@ public final class AgentLoop {
                 col.toolUses().stream().map(ResponseCollector.ToolUse::id).toList(),
                 col.usage()));
 
-            // For now: single-turn skeleton. Break after first response.
+            if (col.stopReason() == StopReason.TOOL_USE && !col.toolUses().isEmpty()) {
+                // Build assistant content: text (if any) + all ToolUseBlocks
+                var assistantBlocks = new ArrayList<ContentBlock>();
+                if (!col.text().isEmpty()) {
+                    assistantBlocks.add(new ContentBlock.TextBlock(col.text().toString()));
+                }
+                for (var u : col.toolUses()) {
+                    assistantBlocks.add(new ContentBlock.ToolUseBlock(u.id(), u.name(), u.input()));
+                }
+                session.appendAssistant(assistantBlocks);
+
+                // Partition by safety and execute
+                var batch = Batch.partition(col.toolUses(), registry);
+                sink.accept(new AgentEvent.BatchStart(batch.safe().size(), batch.unsafe().size()));
+
+                var results = new ArrayList<ToolResultPayload>();
+
+                // Safe tools: parallel execution
+                batch.safe().parallelStream().forEach(u -> {
+                    var r = executeOne(u);
+                    synchronized (results) {
+                        results.add(new ToolResultPayload(u.id(), r));
+                    }
+                    sink.accept(new AgentEvent.ToolResult(u.id(), u.name(), r.isError(), r.content()));
+                });
+
+                // Unsafe tools: serial execution
+                for (var u : batch.unsafe()) {
+                    var r = executeOne(u);
+                    results.add(new ToolResultPayload(u.id(), r));
+                    sink.accept(new AgentEvent.ToolResult(u.id(), u.name(), r.isError(), r.content()));
+                }
+
+                int failed = (int) results.stream().filter(r -> r.result().isError()).count();
+                sink.accept(new AgentEvent.BatchEnd(results.size(), failed));
+
+                // Append all tool results as a single user message
+                var resultBlocks = new ArrayList<ContentBlock>();
+                for (var r : results) {
+                    resultBlocks.add(new ContentBlock.ToolResultBlock(
+                        r.toolUseId(), r.result().content(), r.result().isError()));
+                }
+                session.appendUser(resultBlocks);
+
+                iteration++;
+                continue;
+            }
+
+            // Non-tool response: append text and stop
             if (!col.text().isEmpty()) {
                 session.appendAssistant(List.of(new ContentBlock.TextBlock(col.text().toString())));
             }
+
+            if (col.stopReason() == StopReason.END_TURN && col.text().isEmpty()
+                    && col.toolUses().isEmpty()) {
+                consecutiveUnknown++;
+                if (consecutiveUnknown >= config.maxConsecutiveUnknown()) {
+                    finalStop = StopReason.CONSECUTIVE_UNKNOWN;
+                    finalDetail = "consecutive empty responses: " + consecutiveUnknown;
+                    break;
+                }
+            }
+
             finalStop = col.stopReason();
             finalDetail = "assistant finished";
-            break;  // Single-turn skeleton: Task 14 adds multi-turn loop
+            break;
         }
 
         if (iteration >= config.maxIterations() && finalStop == StopReason.END_TURN) {
@@ -93,4 +150,14 @@ public final class AgentLoop {
 
         sink.accept(new AgentEvent.AgentStop(finalStop, finalDetail));
     }
+
+    private ToolResult executeOne(ResponseCollector.ToolUse u) {
+        try {
+            return executor.run(u.name(), u.input());
+        } catch (Exception e) {
+            return ToolResult.error("internal error: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private record ToolResultPayload(String toolUseId, ToolResult result) {}
 }

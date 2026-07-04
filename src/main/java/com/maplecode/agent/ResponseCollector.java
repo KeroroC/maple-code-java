@@ -101,5 +101,5 @@ public final class ResponseCollector implements Consumer<StreamChunk> {
     /** 测试用：暴露 pendingJson 给测试。 */
     StringBuilder pendingJsonForTest() { return pendingJson; }
 
-    public record ToolUse(String id, String name, JsonNode input) {}
+    public record ToolUse(String id, String name, JsonNode input) implements NamedToolUse {}
 }
