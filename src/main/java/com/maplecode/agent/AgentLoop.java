@@ -119,6 +119,28 @@ public final class AgentLoop {
                 }
                 session.appendUser(resultBlocks);
 
+                // Track consecutive unknown tools
+                int unknownThisBatch = 0;
+                for (var r : results) {
+                    if (r.result().isError() && r.result().content() != null
+                        && r.result().content().startsWith("Unknown tool:")) {
+                        unknownThisBatch++;
+                    } else {
+                        unknownThisBatch = 0;
+                        break;
+                    }
+                }
+                if (unknownThisBatch == 0) {
+                    consecutiveUnknown = 0;
+                } else {
+                    consecutiveUnknown += unknownThisBatch;
+                }
+                if (consecutiveUnknown >= config.maxConsecutiveUnknown()) {
+                    finalStop = StopReason.CONSECUTIVE_UNKNOWN;
+                    finalDetail = "unknown tool called " + config.maxConsecutiveUnknown() + " times in a row";
+                    break;
+                }
+
                 iteration++;
                 continue;
             }
@@ -126,16 +148,6 @@ public final class AgentLoop {
             // Non-tool response: append text and stop
             if (!col.text().isEmpty()) {
                 session.appendAssistant(List.of(new ContentBlock.TextBlock(col.text().toString())));
-            }
-
-            if (col.stopReason() == StopReason.END_TURN && col.text().isEmpty()
-                    && col.toolUses().isEmpty()) {
-                consecutiveUnknown++;
-                if (consecutiveUnknown >= config.maxConsecutiveUnknown()) {
-                    finalStop = StopReason.CONSECUTIVE_UNKNOWN;
-                    finalDetail = "consecutive empty responses: " + consecutiveUnknown;
-                    break;
-                }
             }
 
             finalStop = col.stopReason();

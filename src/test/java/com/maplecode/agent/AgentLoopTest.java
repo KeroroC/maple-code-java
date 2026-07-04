@@ -2,6 +2,7 @@ package com.maplecode.agent;
 
 import com.maplecode.fake.FakeLlmProvider;
 import com.maplecode.fake.RecordingTool;
+import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.StreamChunk;
 import com.maplecode.provider.StreamChunk.StopReason;
 import com.maplecode.session.ChatSession;
@@ -202,5 +203,80 @@ class AgentLoopTest {
         agent.run("run both", events::add);
 
         assertEquals(2, exec.calls().size());
+    }
+
+    @Test
+    void maxIterationsTriggersStop() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var cfg = new AgentConfig(3, 3, com.maplecode.agent.PlanMode.NORMAL);
+
+        var loopScript = List.<StreamChunk>of(
+            new StreamChunk.ToolUseStart("t1", "read_file"),
+            new StreamChunk.ToolUseEnd("t1", "read_file", mapper.readTree("{}")),
+            new StreamChunk.MessageEnd(StreamChunk.StopReason.TOOL_USE, null)
+        );
+        var scripts = List.of(loopScript, loopScript, loopScript, loopScript, loopScript);
+        var provider = new FakeLlmProvider(scripts);
+        var registry = new ToolRegistry(List.of(noopTool("read_file", ToolResult.ok("x"))));
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var agent = new AgentLoop(provider, registry, executor, session, cfg);
+
+        var events = new ArrayList<AgentEvent>();
+        agent.run("loop forever", events::add);
+
+        long iterStarts = events.stream()
+            .filter(e -> e instanceof AgentEvent.IterationStart).count();
+        assertEquals(3, iterStarts);
+
+        var stop = (AgentEvent.AgentStop) events.stream()
+            .filter(e -> e instanceof AgentEvent.AgentStop).findFirst().orElseThrow();
+        assertEquals(StreamChunk.StopReason.MAX_ITERATIONS, stop.reason());
+    }
+
+    @Test
+    void threeConsecutiveUnknownToolsTriggersStop() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var unknownChunk = List.<StreamChunk>of(
+            new StreamChunk.ToolUseStart("t1", "unknown_tool"),
+            new StreamChunk.ToolUseEnd("t1", "unknown_tool", mapper.readTree("{}")),
+            new StreamChunk.MessageEnd(StreamChunk.StopReason.TOOL_USE, null)
+        );
+        var scripts = List.of(unknownChunk, unknownChunk, unknownChunk, unknownChunk);
+        var provider = new FakeLlmProvider(scripts);
+        var registry = new ToolRegistry(List.of(noopTool("read_file", ToolResult.ok("x"))));
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var agent = new AgentLoop(provider, registry, executor, session,
+            new AgentConfig(25, 3, com.maplecode.agent.PlanMode.NORMAL));
+
+        var events = new ArrayList<AgentEvent>();
+        agent.run("try unknown", events::add);
+
+        var stop = (AgentEvent.AgentStop) events.stream()
+            .filter(e -> e instanceof AgentEvent.AgentStop).findFirst().orElseThrow();
+        assertEquals(StreamChunk.StopReason.CONSECUTIVE_UNKNOWN, stop.reason());
+    }
+
+    @Test
+    void providerExceptionEmitsProviderErrorStop() {
+        LlmProvider failing = new LlmProvider() {
+            public void stream(com.maplecode.provider.ChatRequest req,
+                               java.util.function.Consumer<StreamChunk> sink) {
+                throw new com.maplecode.error.ProviderException("network down");
+            }
+        };
+        var registry = new ToolRegistry(List.of());
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var agent = new AgentLoop(failing, registry, executor, session, AgentConfig.defaults());
+
+        var events = new ArrayList<AgentEvent>();
+        agent.run("hello", events::add);
+
+        var stop = (AgentEvent.AgentStop) events.stream()
+            .filter(e -> e instanceof AgentEvent.AgentStop).findFirst().orElseThrow();
+        assertEquals(StreamChunk.StopReason.PROVIDER_ERROR, stop.reason());
+        assertTrue(stop.detail().contains("network down"));
     }
 }
