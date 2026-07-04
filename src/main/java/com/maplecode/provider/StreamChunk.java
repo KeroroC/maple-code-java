@@ -23,7 +23,7 @@ public sealed interface StreamChunk
     record TextDelta(String text) implements StreamChunk {}
     record ThinkingDelta(String text) implements StreamChunk {}
     record MessageStart() implements StreamChunk {}
-    record MessageEnd(StopReason reason) implements StreamChunk {}
+    record MessageEnd(StopReason reason, TokenUsage usage) implements StreamChunk {}
     record Error(String code, String message) implements StreamChunk {}
 
     /**
@@ -39,5 +39,11 @@ public sealed interface StreamChunk
     record ToolUseDelta(String id, String partialJson) implements StreamChunk {}
     record ToolUseEnd(String id, String name, JsonNode input) implements StreamChunk {}
 
-    enum StopReason { END_TURN, MAX_TOKENS, STOP, ERROR, TOOL_USE }
+    enum StopReason {
+        END_TURN, MAX_TOKENS, STOP, ERROR, TOOL_USE,         // v2 已有
+        MAX_ITERATIONS,                                       // v3 新增
+        CONSECUTIVE_UNKNOWN,                                  // v3 新增
+        PROVIDER_ERROR,                                       // v3 新增
+        USER_CANCELLED                                        // v3 新增
+    }
 }

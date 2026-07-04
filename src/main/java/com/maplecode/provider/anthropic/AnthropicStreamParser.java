@@ -102,7 +102,7 @@ public final class AnthropicStreamParser {
             return;
         }
         if (type.equals("message_stop")) {
-            sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason)));
+            sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason), null));
             return;
         }
         if (type.equals("error")) {

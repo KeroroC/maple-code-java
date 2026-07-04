@@ -34,7 +34,7 @@ public final class OpenAiStreamParser {
         if (data == null) return;
         if (data.equals("[DONE]")) {
             flushTools(sink);
-            sink.accept(new StreamChunk.MessageEnd(StreamChunk.StopReason.STOP));
+            sink.accept(new StreamChunk.MessageEnd(StreamChunk.StopReason.STOP, null));
             ended = true;
             return;
         }
@@ -106,7 +106,7 @@ public final class OpenAiStreamParser {
                 case "tool_calls"  -> StreamChunk.StopReason.TOOL_USE;
                 default            -> StreamChunk.StopReason.STOP;
             };
-            sink.accept(new StreamChunk.MessageEnd(reason));
+            sink.accept(new StreamChunk.MessageEnd(reason, null));
             ended = true;
         }
     }
