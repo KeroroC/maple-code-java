@@ -37,7 +37,6 @@ public final class ConfigLoader {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static AppConfig parse(Map<?, ?> root) {
         String protocol = requireString(root, "protocol");
         String model = requireString(root, "model");
@@ -60,7 +59,6 @@ public final class ConfigLoader {
             thinking, new AppConfig.Timeouts(connect, read));
     }
 
-    @SuppressWarnings("unchecked")
     private static ThinkingConfig parseThinking(Map<?, ?> m) {
         if (m == null) return null;
         String typeStr = optionalString(m, "type");
@@ -129,7 +127,6 @@ public final class ConfigLoader {
         return v instanceof Number n ? n.intValue() : null;
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<?, ?> optionalMap(Map<?, ?> m, String key) {
         Object v = m.get(key);
         return v instanceof Map<?, ?> map ? map : null;
