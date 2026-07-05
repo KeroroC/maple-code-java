@@ -35,7 +35,7 @@ class OpenAiStreamParserUsageTest {
             .findFirst()
             .orElseThrow();
 
-        assertEquals(new TokenUsage(30, 10), messageEnd.usage());
+        assertEquals(TokenUsage.of(30, 10), messageEnd.usage());
     }
 
     @Test

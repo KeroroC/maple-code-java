@@ -70,7 +70,7 @@ class AnthropicStreamParserUsageTest {
             .findFirst()
             .orElseThrow();
 
-        assertEquals(new TokenUsage(100, 50), messageEnd.usage());
+        assertEquals(TokenUsage.of(100, 50), messageEnd.usage());
     }
 
     @Test

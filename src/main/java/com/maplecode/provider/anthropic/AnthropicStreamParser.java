@@ -117,7 +117,7 @@ public final class AnthropicStreamParser {
         if (type.equals("message_stop")) {
             TokenUsage usage = (lastInputTokens == 0 && lastOutputTokens == 0)
                 ? null
-                : new TokenUsage(lastInputTokens, lastOutputTokens);
+                : TokenUsage.of(lastInputTokens, lastOutputTokens);
             sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason), usage));
             return;
         }

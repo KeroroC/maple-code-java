@@ -59,7 +59,7 @@ public final class OpenAiStreamParser {
         // 必须在 ended 检查之前，因为 usage chunk 可能在 finish_reason 之后到达
         JsonNode usage = node.path("usage");
         if (!usage.isMissingNode() && usage.has("prompt_tokens")) {
-            lastUsage = new TokenUsage(
+            lastUsage = TokenUsage.of(
                 usage.path("prompt_tokens").asInt(0),
                 usage.path("completion_tokens").asInt(0));
         }

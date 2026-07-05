@@ -71,8 +71,8 @@ class ResponseCollectorTest {
     @Test
     void capturesUsageFromMessageEnd() {
         var col = new ResponseCollector(e -> {}, emptyRegistry());
-        col.accept(new StreamChunk.MessageEnd(StopReason.END_TURN, new TokenUsage(10, 20)));
-        assertEquals(new TokenUsage(10, 20), col.usage());
+        col.accept(new StreamChunk.MessageEnd(StopReason.END_TURN, TokenUsage.of(10, 20)));
+        assertEquals(TokenUsage.of(10, 20), col.usage());
     }
 
     @Test
