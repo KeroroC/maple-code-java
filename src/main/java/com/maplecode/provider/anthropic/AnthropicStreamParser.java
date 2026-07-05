@@ -17,6 +17,8 @@ public final class AnthropicStreamParser {
     private String lastStopReason = null;
     private int lastInputTokens = 0;
     private int lastOutputTokens = 0;
+    private int cacheCreation = 0;
+    private int cacheRead = 0;
     private String currentToolUseId = null;
     private String currentToolName = null;
     private StringBuilder currentToolJson = new StringBuilder();
@@ -29,6 +31,8 @@ public final class AnthropicStreamParser {
         lastStopReason = null;
         lastInputTokens = 0;
         lastOutputTokens = 0;
+        cacheCreation = 0;
+        cacheRead = 0;
         currentToolUseId = null;
         currentToolName = null;
         currentToolJson.setLength(0);
@@ -42,11 +46,16 @@ public final class AnthropicStreamParser {
             lastStopReason = null;
             lastInputTokens = 0;
             lastOutputTokens = 0;
+            cacheCreation = 0;
+            cacheRead = 0;
             currentToolUseId = null;
             currentToolName = null;
             currentToolJson.setLength(0);
             JsonNode node = parse(event.data());
-            lastInputTokens = node.path("message").path("usage").path("input_tokens").asInt(0);
+            JsonNode usage = node.path("message").path("usage");
+            lastInputTokens  = usage.path("input_tokens").asInt(0);
+            cacheCreation    = usage.path("cache_creation_input_tokens").asInt(0);
+            cacheRead        = usage.path("cache_read_input_tokens").asInt(0);
             sink.accept(new StreamChunk.MessageStart());
             return;
         }
@@ -115,9 +124,10 @@ public final class AnthropicStreamParser {
             return;
         }
         if (type.equals("message_stop")) {
-            TokenUsage usage = (lastInputTokens == 0 && lastOutputTokens == 0)
+            TokenUsage usage = (lastInputTokens == 0 && lastOutputTokens == 0
+                && cacheCreation == 0 && cacheRead == 0)
                 ? null
-                : TokenUsage.of(lastInputTokens, lastOutputTokens);
+                : new TokenUsage(lastInputTokens, lastOutputTokens, cacheCreation, cacheRead);
             sink.accept(new StreamChunk.MessageEnd(mapStopReason(lastStopReason), usage));
             return;
         }

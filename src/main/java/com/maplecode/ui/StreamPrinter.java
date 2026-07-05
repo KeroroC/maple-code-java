@@ -1,6 +1,7 @@
 package com.maplecode.ui;
 
 import com.maplecode.agent.AgentEvent;
+import com.maplecode.provider.TokenUsage;
 
 import java.io.PrintStream;
 import java.util.function.Consumer;
@@ -61,6 +62,19 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
     /** 普通文本输出，无颜色无格式 */
     public void info(String message) {
         out.println(message);
+    }
+
+    /** 打印 token 用量统计，cache 字段仅在 >0 时显示 */
+    public void usage(TokenUsage u) {
+        if (u == null) return;
+        StringBuilder sb = new StringBuilder("[usage: input=").append(u.inputTokens())
+            .append(" out=").append(u.outputTokens());
+        if (u.cacheCreationTokens() > 0)
+            sb.append(" cache_create=").append(u.cacheCreationTokens());
+        if (u.cacheReadTokens() > 0)
+            sb.append(" cache_read=").append(u.cacheReadTokens());
+        sb.append("]");
+        info(sb.toString());
     }
 
     /** 打印空行，用于分隔对话轮次 */
