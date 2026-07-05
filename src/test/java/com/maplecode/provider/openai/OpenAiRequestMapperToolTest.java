@@ -35,7 +35,7 @@ class OpenAiRequestMapperToolTest {
 
     @Test
     void tools_field_wrapped_in_function_type() {
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))),
             null, List.of(mk("read_file")));
@@ -50,7 +50,7 @@ class OpenAiRequestMapperToolTest {
     @Test
     void assistant_message_with_tool_calls_emits_tool_calls_array() {
         var args = JSON.createObjectNode().put("path", "/tmp/x");
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new ChatMessage(ChatMessage.Role.ASSISTANT,
                 List.of(
                     new ContentBlock.TextBlock("I'll read it"),
@@ -69,7 +69,7 @@ class OpenAiRequestMapperToolTest {
 
     @Test
     void tool_result_becomes_role_tool_message() {
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.ToolResultBlock("call_1", "file contents", false)))),
             null, null);

@@ -78,7 +78,10 @@ public final class AgentLoop {
             var tools = (config.planMode() == PlanMode.PLAN)
                 ? registry.readOnly()
                 : registry.all();
-            var req = session.toRequest(config.model(), config.systemPrompt(), config.thinking(), tools);
+            var sysBlocks = config.systemPrompt() != null
+                ? List.of(new com.maplecode.prompt.SystemBlock(config.systemPrompt(), true, "user"))
+                : List.<com.maplecode.prompt.SystemBlock>of();
+            var req = session.toRequest(config.model(), sysBlocks, config.thinking(), tools);
 
             try {
                 provider.stream(req, col);

@@ -34,7 +34,7 @@ class AnthropicRequestMapperToolTest {
 
     @Test
     void tools_field_emitted_when_provided() {
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new com.maplecode.provider.ChatMessage(
                 com.maplecode.provider.ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))),
@@ -50,7 +50,7 @@ class AnthropicRequestMapperToolTest {
     @Test
     void tool_use_message_wire_format() {
         var args = JSON.createObjectNode().put("path", "/tmp/x");
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new com.maplecode.provider.ChatMessage(
                 com.maplecode.provider.ChatMessage.Role.ASSISTANT,
                 List.of(
@@ -70,7 +70,7 @@ class AnthropicRequestMapperToolTest {
 
     @Test
     void tool_result_message_wire_format() {
-        var req = new ChatRequest("m", null,
+        var req = new ChatRequest("m", List.of(),
             List.of(new com.maplecode.provider.ChatMessage(
                 com.maplecode.provider.ChatMessage.Role.USER,
                 List.of(new ContentBlock.ToolResultBlock("tu_1", "file contents", false)))),

@@ -38,8 +38,11 @@ public final class AnthropicRequestMapper {
             root.put("max_tokens", MAX_TOKENS);
             root.put("stream", true);
 
-            if (req.systemPrompt() != null && !req.systemPrompt().isEmpty()) {
-                root.put("system", req.systemPrompt());
+            if (!req.systemBlocks().isEmpty()) {
+                ArrayNode sysArr = root.putArray("system");
+                for (var sb : req.systemBlocks()) {
+                    sysArr.addObject().put("type", "text").put("text", sb.content());
+                }
             }
 
             ArrayNode msgs = root.putArray("messages");

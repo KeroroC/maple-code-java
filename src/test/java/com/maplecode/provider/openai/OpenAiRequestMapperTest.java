@@ -1,5 +1,6 @@
 package com.maplecode.provider.openai;
 
+import com.maplecode.prompt.SystemBlock;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
@@ -20,7 +21,7 @@ class OpenAiRequestMapperTest {
 
     @Test
     void minimal_request_with_user_text() {
-        var req = new ChatRequest("gpt-5", null,
+        var req = new ChatRequest("gpt-5", List.of(),
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))), null, null);
 
@@ -40,7 +41,8 @@ class OpenAiRequestMapperTest {
 
     @Test
     void system_prompt_emits_system_role_message() {
-        var req = new ChatRequest("gpt-5", "be terse",
+        var req = new ChatRequest("gpt-5",
+            List.of(new SystemBlock("be terse", false, "user")),
             List.of(new ChatMessage(ChatMessage.Role.USER,
                 List.of(new ContentBlock.TextBlock("hi")))), null, null);
         String body = mapper.toJsonBody(req);
@@ -49,7 +51,7 @@ class OpenAiRequestMapperTest {
 
     @Test
     void multiple_messages_preserved_in_order() {
-        var req = new ChatRequest("gpt-5", null, List.of(
+        var req = new ChatRequest("gpt-5", List.of(), List.of(
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u1"))),
             new ChatMessage(ChatMessage.Role.ASSISTANT, List.of(new ContentBlock.TextBlock("a1"))),
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("u2")))

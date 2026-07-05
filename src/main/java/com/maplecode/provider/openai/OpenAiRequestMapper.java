@@ -42,10 +42,10 @@ public final class OpenAiRequestMapper {
             // （后续可接到 o1 的 reasoning_effort）
 
             ArrayNode msgs = root.putArray("messages");
-            if (req.systemPrompt() != null && !req.systemPrompt().isEmpty()) {
+            for (var sb : req.systemBlocks()) {
                 msgs.add(JSON.createObjectNode()
                     .put("role", "system")
-                    .put("content", req.systemPrompt()));
+                    .put("content", sb.content()));
             }
             for (var m : req.messages()) {
                 ObjectNode om = encodeMessage(m);
