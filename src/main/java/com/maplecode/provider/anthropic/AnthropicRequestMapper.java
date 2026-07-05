@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.ThinkingConfig;
+import com.maplecode.prompt.SystemBlock;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -41,7 +42,13 @@ public final class AnthropicRequestMapper {
             if (!req.systemBlocks().isEmpty()) {
                 ArrayNode sysArr = root.putArray("system");
                 for (var sb : req.systemBlocks()) {
-                    sysArr.addObject().put("type", "text").put("text", sb.content());
+                    ObjectNode bn = sysArr.addObject();
+                    bn.put("type", "text");
+                    bn.put("text", sb.content());
+                    if (sb.cacheBoundary()) {
+                        ObjectNode cc = bn.putObject("cache_control");
+                        cc.put("type", "ephemeral");
+                    }
                 }
             }
 

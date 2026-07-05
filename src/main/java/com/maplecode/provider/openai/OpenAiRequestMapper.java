@@ -7,11 +7,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
+import com.maplecode.prompt.SystemBlock;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.stream.Collectors;
 
 public final class OpenAiRequestMapper {
 
@@ -42,10 +44,16 @@ public final class OpenAiRequestMapper {
             // （后续可接到 o1 的 reasoning_effort）
 
             ArrayNode msgs = root.putArray("messages");
-            for (var sb : req.systemBlocks()) {
-                msgs.add(JSON.createObjectNode()
-                    .put("role", "system")
-                    .put("content", sb.content()));
+            if (!req.systemBlocks().isEmpty()) {
+                String joined = req.systemBlocks().stream()
+                    .map(SystemBlock::content)
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining("\n\n"));
+                if (!joined.isBlank()) {
+                    msgs.add(JSON.createObjectNode()
+                        .put("role", "system")
+                        .put("content", joined));
+                }
             }
             for (var m : req.messages()) {
                 ObjectNode om = encodeMessage(m);

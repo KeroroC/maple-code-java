@@ -1,5 +1,7 @@
 package com.maplecode.provider.anthropic;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maplecode.prompt.SystemBlock;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatRequest;
@@ -17,6 +19,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class AnthropicRequestMapperTest {
 
@@ -89,5 +92,54 @@ class AnthropicRequestMapperTest {
         int a1 = body.indexOf("\"a1\"");
         int u2 = body.indexOf("\"u2\"");
         assertTrue(u1 > 0 && a1 > u1 && u2 > a1, "messages must preserve input order");
+    }
+
+    private final ObjectMapper json = new ObjectMapper();
+
+    @Test
+    void systemBlocksSerialisedAsArray() throws Exception {
+        var req = new ChatRequest("m",
+            List.of(new SystemBlock("A", false, "a"),
+                    new SystemBlock("B", true, "b")),
+            List.of(), null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        var sys = root.path("system");
+        assertTrue(sys.isArray());
+        assertEquals(2, sys.size());
+        assertEquals("A", sys.get(0).path("text").asText());
+        assertEquals("B", sys.get(1).path("text").asText());
+    }
+
+    @Test
+    void cacheBoundaryMapsToEphemeral() throws Exception {
+        var req = new ChatRequest("m",
+            List.of(new SystemBlock("A", false, "a"),
+                    new SystemBlock("B", true, "b")),
+            List.of(), null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        assertTrue(root.path("system").get(0).path("cache_control").isMissingNode());
+        assertEquals("ephemeral",
+            root.path("system").get(1).path("cache_control").path("type").asText());
+    }
+
+    @Test
+    void emptySystemBlocksOmitsSystem() throws Exception {
+        var req = new ChatRequest("m", List.of(),
+            List.of(new ChatMessage(ChatMessage.Role.USER,
+                List.of(new ContentBlock.TextBlock("hi")))),
+            null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        assertTrue(root.path("system").isMissingNode());
+    }
+
+    @Test
+    void userMessagePreserved() throws Exception {
+        var req = new ChatRequest("m", List.of(),
+            List.of(new ChatMessage(ChatMessage.Role.USER,
+                List.of(new ContentBlock.TextBlock("hi")))),
+            null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        assertEquals("hi",
+            root.path("messages").get(0).path("content").get(0).path("text").asText());
     }
 }

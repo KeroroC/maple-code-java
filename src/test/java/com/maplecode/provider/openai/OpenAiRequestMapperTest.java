@@ -1,5 +1,7 @@
 package com.maplecode.provider.openai;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maplecode.prompt.SystemBlock;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatRequest;
@@ -61,5 +63,32 @@ class OpenAiRequestMapperTest {
         int a1 = body.indexOf("\"a1\"");
         int u2 = body.indexOf("\"u2\"");
         assertTrue(u1 > 0 && a1 > u1 && u2 > a1, "messages must preserve input order");
+    }
+
+    private final ObjectMapper json = new ObjectMapper();
+
+    @Test
+    void systemBlocksJoinAsFirstSystemMessage() throws Exception {
+        var req = new ChatRequest("m",
+            List.of(new SystemBlock("A", false, "a"),
+                    new SystemBlock("B", true, "b")),
+            List.of(new ChatMessage(ChatMessage.Role.USER,
+                List.of(new ContentBlock.TextBlock("hi")))),
+            null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        var msgs = root.path("messages");
+        assertEquals("system", msgs.get(0).path("role").asText());
+        assertEquals("A\n\nB", msgs.get(0).path("content").asText());
+        assertEquals("user", msgs.get(1).path("role").asText());
+    }
+
+    @Test
+    void cacheBoundaryIgnoredOnOpenAI() throws Exception {
+        var req = new ChatRequest("m",
+            List.of(new SystemBlock("A", true, "a")),
+            List.of(), null, List.of());
+        JsonNode root = json.readTree(mapper.toJsonBody(req));
+        var sys0 = root.path("messages").get(0);
+        assertTrue(sys0.path("cache_control").isMissingNode());
     }
 }
