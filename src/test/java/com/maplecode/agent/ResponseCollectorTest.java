@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -90,5 +91,29 @@ class ResponseCollectorTest {
 
     private static ToolRegistry registryWithRead() {
         return new ToolRegistry(List.of(new com.maplecode.tool.ReadFileTool()));
+    }
+
+    @Test
+    void usageSinkInvokedOnMessageEnd() {
+        var chunks = List.<StreamChunk>of(
+            new StreamChunk.MessageStart(),
+            new StreamChunk.MessageEnd(StopReason.END_TURN, TokenUsage.of(10, 20))
+        );
+        var usages = new ArrayList<TokenUsage>();
+        Consumer<TokenUsage> sink = usages::add;
+
+        var col = new ResponseCollector(e -> {}, emptyRegistry(), sink);
+        chunks.forEach(col);
+
+        assertEquals(1, usages.size());
+        assertEquals(TokenUsage.of(10, 20), usages.get(0));
+    }
+
+    @Test
+    void usageSinkNullIsOk() {
+        var chunks = List.of((StreamChunk) new StreamChunk.MessageEnd(
+            StopReason.END_TURN, TokenUsage.of(10, 20)));
+        var col = new ResponseCollector(e -> {}, emptyRegistry(), null);
+        chunks.forEach(col);   // 不应 NPE
     }
 }

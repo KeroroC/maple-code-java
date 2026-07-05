@@ -1,10 +1,13 @@
 package com.maplecode.agent;
 
 import com.maplecode.error.ProviderException;
+import com.maplecode.prompt.PlanModeReminder;
+import com.maplecode.prompt.PromptAssembler;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.StreamChunk.StopReason;
+import com.maplecode.provider.TokenUsage;
 import com.maplecode.session.ChatSession;
 import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
@@ -21,16 +24,25 @@ public final class AgentLoop {
     private final ToolExecutor executor;
     private final ChatSession session;
     private AgentConfig config;
+    private final Consumer<TokenUsage> usageSink;
     private volatile boolean cancelled;
 
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
-                     AgentConfig config) {
+                     AgentConfig config, Consumer<TokenUsage> usageSink) {
         this.provider = provider;
         this.registry = registry;
         this.executor = executor;
         this.session = session;
         this.config = config;
+        this.usageSink = usageSink;
+    }
+
+    /** 5 参重载（usageSink=null），保留测试路径。 */
+    public AgentLoop(LlmProvider provider, ToolRegistry registry,
+                     ToolExecutor executor, ChatSession session,
+                     AgentConfig config) {
+        this(provider, registry, executor, session, config, null);
     }
 
     public void cancel() {
@@ -72,7 +84,7 @@ public final class AgentLoop {
             }
 
             sink.accept(new AgentEvent.IterationStart(iteration));
-            ResponseCollector col = new ResponseCollector(sink, registry);
+            ResponseCollector col = new ResponseCollector(sink, registry, usageSink);
 
             // Wire layer: PLAN mode only exposes read-only tools to the model
             var tools = (config.planMode() == PlanMode.PLAN)
@@ -80,6 +92,20 @@ public final class AgentLoop {
                 : registry.all();
             var sysBlocks = config.systemBlocks();
             var req = session.toRequest(config.model(), sysBlocks, config.thinking(), tools);
+
+            // PLAN 模式下追加 reminder（不持久化到 session）
+            var reminderForm = PlanModeReminder.decide(
+                config.planMode(), config.reminderState(), iteration);
+            if (reminderForm != PlanModeReminder.Form.NONE) {
+                String body = (reminderForm == PlanModeReminder.Form.FULL)
+                    ? PlanModeReminder.renderFull()
+                    : PlanModeReminder.renderBrief();
+                req = new PromptAssembler().attachReminder(req, body);
+                if (reminderForm == PlanModeReminder.Form.FULL) {
+                    config = config.withReminderState(
+                        config.reminderState().afterFull(iteration));
+                }
+            }
 
             try {
                 provider.stream(req, col);

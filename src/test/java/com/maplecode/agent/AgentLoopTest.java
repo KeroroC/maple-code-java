@@ -43,7 +43,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of());
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("hi", events::add);
@@ -65,7 +65,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of());
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
         agent.cancel();
 
         var events = new ArrayList<AgentEvent>();
@@ -93,7 +93,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of(noopTool("read_file", ToolResult.ok("file content"))));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("read x", events::add);
@@ -138,7 +138,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of(noopTool("read_file", ToolResult.ok("x"))));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("go", events::add);
@@ -167,7 +167,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of(sharedTool));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("read both", events::add);
@@ -198,7 +198,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of(exec));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("run both", events::add);
@@ -222,7 +222,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of(noopTool("read_file", ToolResult.ok("x"))));
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, cfg);
+        var agent = new AgentLoop(provider, registry, executor, session, cfg, null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("loop forever", events::add);
@@ -251,7 +251,7 @@ class AgentLoopTest {
         var session = new ChatSession();
         var agent = new AgentLoop(provider, registry, executor, session,
             new AgentConfig("m", List.of(), null, 25, 3,
-                com.maplecode.agent.PlanMode.NORMAL, PlanModeReminder.State.initial()));
+                com.maplecode.agent.PlanMode.NORMAL, PlanModeReminder.State.initial()), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("try unknown", events::add);
@@ -272,7 +272,7 @@ class AgentLoopTest {
         var registry = new ToolRegistry(List.of());
         var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(failing, registry, executor, session, AgentConfig.defaults());
+        var agent = new AgentLoop(failing, registry, executor, session, AgentConfig.defaults(), null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("hello", events::add);
@@ -307,7 +307,7 @@ class AgentLoopTest {
         var session = new ChatSession();
         var cfg = new AgentConfig("m", List.of(), null, 25, 3,
             PlanMode.PLAN, PlanModeReminder.State.initial());
-        var agent = new AgentLoop(spyProvider, registry, executor, session, cfg);
+        var agent = new AgentLoop(spyProvider, registry, executor, session, cfg, null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("plan this", events::add);
@@ -338,7 +338,7 @@ class AgentLoopTest {
         var session = new ChatSession();
         var cfg = new AgentConfig("m", List.of(), null, 25, 3,
             PlanMode.PLAN, PlanModeReminder.State.initial());
-        var agent = new AgentLoop(provider, registry, executor, session, cfg);
+        var agent = new AgentLoop(provider, registry, executor, session, cfg, null);
 
         var events = new ArrayList<AgentEvent>();
         agent.run("plan+do", events::add);

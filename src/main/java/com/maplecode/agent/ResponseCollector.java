@@ -27,15 +27,23 @@ public final class ResponseCollector implements Consumer<StreamChunk> {
     private final StringBuilder pendingJson = new StringBuilder();
     private final Consumer<AgentEvent> sink;
     private final ToolRegistry registry;
+    private final Consumer<TokenUsage> usageSink;   // nullable
     private String pendingId;
     private String pendingName;
     private StopReason stopReason;
     private TokenUsage usage;
     private boolean errored;
 
-    public ResponseCollector(Consumer<AgentEvent> sink, ToolRegistry registry) {
+    public ResponseCollector(Consumer<AgentEvent> sink, ToolRegistry registry,
+                            Consumer<TokenUsage> usageSink) {
         this.sink = sink;
         this.registry = registry;
+        this.usageSink = usageSink;
+    }
+
+    /** 向后兼容 2 参构造（usageSink=null）。 */
+    public ResponseCollector(Consumer<AgentEvent> sink, ToolRegistry registry) {
+        this(sink, registry, null);
     }
 
     @Override
@@ -68,6 +76,7 @@ public final class ResponseCollector implements Consumer<StreamChunk> {
             case StreamChunk.MessageEnd e -> {
                 stopReason = e.reason();
                 usage = e.usage();
+                if (usageSink != null && usage != null) usageSink.accept(usage);
             }
             case StreamChunk.Error e -> {
                 errored = true;
