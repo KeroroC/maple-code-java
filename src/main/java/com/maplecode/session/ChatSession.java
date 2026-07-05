@@ -5,6 +5,7 @@ import com.maplecode.provider.ChatMessage.Role;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.ThinkingConfig;
+import com.maplecode.prompt.SystemBlock;
 import com.maplecode.tool.Tool;
 
 import java.util.ArrayList;
@@ -46,13 +47,15 @@ public final class ChatSession {
         messages.clear();
     }
 
-    public ChatRequest toRequest(String model, String systemPrompt, ThinkingConfig thinking) {
-        return new ChatRequest(model, systemPrompt,
-            Collections.unmodifiableList(new ArrayList<>(messages)), thinking, null);
+    public ChatRequest toRequest(String model, List<SystemBlock> systemBlocks,
+                                 ThinkingConfig thinking, List<Tool> tools) {
+        return new ChatRequest(model, systemBlocks,
+            Collections.unmodifiableList(new ArrayList<>(messages)),
+            thinking, tools);
     }
 
-    public ChatRequest toRequest(String model, String systemPrompt, ThinkingConfig thinking, List<Tool> tools) {
-        return new ChatRequest(model, systemPrompt,
-            Collections.unmodifiableList(new ArrayList<>(messages)), thinking, tools);
+    public ChatRequest toRequest(String model, List<SystemBlock> systemBlocks,
+                                 ThinkingConfig thinking) {
+        return toRequest(model, systemBlocks, thinking, null);
     }
 }

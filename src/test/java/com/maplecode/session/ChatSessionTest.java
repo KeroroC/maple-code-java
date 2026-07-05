@@ -3,6 +3,7 @@ package com.maplecode.session;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
+import com.maplecode.prompt.SystemBlock;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,7 +16,7 @@ class ChatSessionTest {
     @Test
     void empty_session_toRequest_has_empty_messages() {
         var session = new ChatSession();
-        ChatRequest req = session.toRequest("m", null, null);
+        ChatRequest req = session.toRequest("m", List.of(), null);
         assertEquals(0, req.messages().size());
     }
 
@@ -26,7 +27,7 @@ class ChatSessionTest {
         session.appendAssistant(List.of(new ContentBlock.TextBlock("a1")));
         session.appendUserText("u2");
 
-        List<ChatMessage> msgs = session.toRequest("m", null, null).messages();
+        List<ChatMessage> msgs = session.toRequest("m", List.of(), null).messages();
         assertEquals(3, msgs.size());
         assertEquals(ChatMessage.Role.USER, msgs.get(0).role());
         assertEquals("u1", ((ContentBlock.TextBlock) msgs.get(0).blocks().get(0)).text());
@@ -40,25 +41,26 @@ class ChatSessionTest {
         var session = new ChatSession();
         session.appendUserText("x");
         session.clear();
-        assertEquals(0, session.toRequest("m", null, null).messages().size());
+        assertEquals(0, session.toRequest("m", List.of(), null).messages().size());
     }
 
     @Test
     void toRequest_returns_immutable_copy() {
         var session = new ChatSession();
         session.appendUserText("u1");
-        List<ChatMessage> msgs = session.toRequest("m", null, null).messages();
+        List<ChatMessage> msgs = session.toRequest("m", List.of(), null).messages();
         assertThrows(UnsupportedOperationException.class, () -> msgs.add(
             new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("rogue")))));
     }
 
     @Test
-    void toRequest_passes_through_system_prompt_and_thinking() {
+    void toRequest_passes_through_system_blocks_and_thinking() {
         var session = new ChatSession();
         session.appendUserText("hi");
-        ChatRequest req = session.toRequest("claude-sonnet-4-6", "be terse", null);
+        var blocks = List.of(new SystemBlock("be terse", false, "test"));
+        ChatRequest req = session.toRequest("claude-sonnet-4-6", blocks, null);
         assertEquals("claude-sonnet-4-6", req.model());
-        assertEquals("be terse", req.systemPrompt());
+        assertEquals(blocks, req.systemBlocks());
         assertEquals(null, req.thinking());
     }
 
@@ -67,7 +69,7 @@ class ChatSessionTest {
         var session = new ChatSession();
         session.appendUserText("hi");
         // 3 参重载固定传 null
-        ChatRequest req = session.toRequest("m", null, null);
+        ChatRequest req = session.toRequest("m", List.of(), null);
         assertEquals(null, req.tools());
     }
 
@@ -76,10 +78,10 @@ class ChatSessionTest {
         var session = new ChatSession();
         session.appendUserText("hi");
         // 4 参重载把 tools 透传；null 也接受
-        ChatRequest req = session.toRequest("m", null, null, null);
+        ChatRequest req = session.toRequest("m", List.of(), null, null);
         assertEquals(null, req.tools());
         // 4 参重载把空列表也透传
-        ChatRequest req2 = session.toRequest("m", null, null, List.of());
+        ChatRequest req2 = session.toRequest("m", List.of(), null, List.of());
         assertEquals(List.of(), req2.tools());
     }
 
@@ -91,7 +93,7 @@ class ChatSessionTest {
         session.appendUser(blocks);
         blocks.add(new ContentBlock.TextBlock("rogue"));
         // 改原 list 不应影响 session
-        List<ChatMessage> msgs = session.toRequest("m", null, null).messages();
+        List<ChatMessage> msgs = session.toRequest("m", List.of(), null).messages();
         assertEquals(1, msgs.get(0).blocks().size());
     }
 
