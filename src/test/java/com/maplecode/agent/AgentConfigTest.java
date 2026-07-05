@@ -2,8 +2,11 @@ package com.maplecode.agent;
 
 import com.maplecode.config.AppConfig;
 import com.maplecode.error.ConfigException;
+import com.maplecode.prompt.PlanModeReminder;
 import com.maplecode.provider.ThinkingConfig;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,23 +16,26 @@ class AgentConfigTest {
     void defaultsAreSensible() {
         var c = AgentConfig.defaults();
         assertEquals("test-model", c.model());
-        assertNull(c.systemPrompt());
+        assertTrue(c.systemBlocks().isEmpty());
         assertNull(c.thinking());
         assertEquals(25, c.maxIterations());
         assertEquals(3, c.maxConsecutiveUnknown());
         assertEquals(PlanMode.NORMAL, c.planMode());
+        assertEquals(PlanModeReminder.State.initial(), c.reminderState());
     }
 
     @Test
     void rejectsZeroIterations() {
         assertThrows(ConfigException.class,
-            () -> new AgentConfig("m", null, null, 0, 3, PlanMode.NORMAL));
+            () -> new AgentConfig("m", List.of(), null, 0, 3,
+                PlanMode.NORMAL, PlanModeReminder.State.initial()));
     }
 
     @Test
     void rejectsZeroConsecutiveUnknown() {
         assertThrows(ConfigException.class,
-            () -> new AgentConfig("m", null, null, 25, 0, PlanMode.NORMAL));
+            () -> new AgentConfig("m", List.of(), null, 25, 0,
+                PlanMode.NORMAL, PlanModeReminder.State.initial()));
     }
 
     @Test
@@ -45,7 +51,7 @@ class AgentConfigTest {
         var agent = AgentConfig.fromAppConfig(app);
 
         assertEquals("claude-sonnet-4-6", agent.model());
-        assertEquals("You are helpful", agent.systemPrompt());
+        assertTrue(agent.systemBlocks().isEmpty());
         assertSame(thinking, agent.thinking());
         assertEquals(25, agent.maxIterations());
         assertEquals(3, agent.maxConsecutiveUnknown());
@@ -58,7 +64,29 @@ class AgentConfigTest {
             "sk-test", null, null, new AppConfig.Timeouts(10, 60));
         var agent = AgentConfig.fromAppConfig(app);
 
-        assertNull(agent.systemPrompt());
+        assertTrue(agent.systemBlocks().isEmpty());
         assertNull(agent.thinking());
+    }
+
+    @Test
+    void withReminderStateCreatesCopy() {
+        var original = AgentConfig.defaults();
+        var newState = PlanModeReminder.State.initial().afterFull(1);
+        var updated = original.withReminderState(newState);
+
+        assertEquals(PlanModeReminder.State.initial(), original.reminderState());
+        assertEquals(newState, updated.reminderState());
+        assertEquals(original.model(), updated.model());
+        assertEquals(original.systemBlocks(), updated.systemBlocks());
+    }
+
+    @Test
+    void withPlanModeCreatesCopy() {
+        var original = AgentConfig.defaults();
+        var updated = original.withPlanMode(PlanMode.PLAN);
+
+        assertEquals(PlanMode.NORMAL, original.planMode());
+        assertEquals(PlanMode.PLAN, updated.planMode());
+        assertEquals(original.model(), updated.model());
     }
 }

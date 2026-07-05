@@ -16,8 +16,6 @@ import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
-import java.util.List;
-
 public final class ReplLoop {
 
     private final AppConfig appConfig;
@@ -91,13 +89,7 @@ public final class ReplLoop {
                     printer.error("/plan requires a query");
                     continue;
                 }
-                agentConfig = new AgentConfig(
-                    agentConfig.model(),
-                    agentConfig.systemPrompt(),
-                    agentConfig.thinking(),
-                    agentConfig.maxIterations(),
-                    agentConfig.maxConsecutiveUnknown(),
-                    PlanMode.PLAN);
+                agentConfig = agentConfig.withPlanMode(PlanMode.PLAN);
                 agent.updateConfig(agentConfig);
                 agent.run(query, printer);
                 printer.newline();
@@ -116,13 +108,7 @@ public final class ReplLoop {
                     continue;
                 }
                 agent.session().clear();
-                agentConfig = new AgentConfig(
-                    agentConfig.model(),
-                    agentConfig.systemPrompt(),
-                    agentConfig.thinking(),
-                    agentConfig.maxIterations(),
-                    agentConfig.maxConsecutiveUnknown(),
-                    PlanMode.NORMAL);
+                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL);
                 agent.updateConfig(agentConfig);
                 agent.run(planText, printer);
                 printer.newline();
@@ -132,13 +118,7 @@ public final class ReplLoop {
             // /cancel
             if (trimmed.equals("/cancel")) {
                 agent.cancel();
-                agentConfig = new AgentConfig(
-                    agentConfig.model(),
-                    agentConfig.systemPrompt(),
-                    agentConfig.thinking(),
-                    agentConfig.maxIterations(),
-                    agentConfig.maxConsecutiveUnknown(),
-                    PlanMode.NORMAL);
+                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL);
                 agent.updateConfig(agentConfig);
                 printer.info("cancelled");
                 continue;
