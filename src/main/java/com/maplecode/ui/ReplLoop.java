@@ -29,7 +29,7 @@ public final class ReplLoop {
     private AgentConfig agentConfig;
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
-                    LineReader reader, ToolRegistry registry) {
+                    LineReader reader, ToolRegistry registry, AgentConfig agentConfig) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -37,16 +37,14 @@ public final class ReplLoop {
         this.registry = registry;
         this.executor = new ToolExecutor(registry);
         this.session = new ChatSession();
-        this.agentConfig = AgentConfig.fromAppConfig(appConfig);
+        this.agentConfig = agentConfig;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
             u -> printer.usage(u));
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
                                       ToolRegistry registry) throws java.io.IOException {
-        Terminal terminal = TerminalBuilder.builder().system(true).build();
-        LineReader reader = LineReaderBuilder.builder().terminal(terminal).build();
-        return new ReplLoop(config, provider, new StreamPrinter(System.out), reader, registry);
+        throw new UnsupportedOperationException("use App.main with explicit AgentConfig");
     }
 
     public void run() {
