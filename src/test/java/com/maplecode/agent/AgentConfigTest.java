@@ -47,7 +47,7 @@ class AgentConfigTest {
     void fromAppConfigCopiesFields() {
         var thinking = new ThinkingConfig(ThinkingConfig.Type.ADAPTIVE, null, ThinkingConfig.Effort.MEDIUM);
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
-            "sk-test", "You are helpful", thinking, new AppConfig.Timeouts(10, 60));
+            "sk-test", "You are helpful", List.of(), thinking, new AppConfig.Timeouts(10, 60));
         var agent = AgentConfig.fromAppConfig(app);
 
         assertEquals("claude-sonnet-4-6", agent.model());
@@ -61,7 +61,7 @@ class AgentConfigTest {
     @Test
     void fromAppConfigHandlesNullOptionals() {
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
-            "sk-test", null, null, new AppConfig.Timeouts(10, 60));
+            "sk-test", null, List.of(), null, new AppConfig.Timeouts(10, 60));
         var agent = AgentConfig.fromAppConfig(app);
 
         assertTrue(agent.systemBlocks().isEmpty());

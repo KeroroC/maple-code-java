@@ -6,6 +6,8 @@ import com.maplecode.provider.anthropic.AnthropicProvider;
 import com.maplecode.provider.openai.OpenAiProvider;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ProviderRegistryTest {
 
     private AppConfig cfg(String protocol) {
-        return new AppConfig(protocol, "m", "https://x", "k", null, null,
+        return new AppConfig(protocol, "m", "https://x", "k", null, List.of(), null,
             new AppConfig.Timeouts(10, 60));
     }
 

@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,11 +18,6 @@ public final class ConfigLoader {
     private static final Pattern ENV_PLACEHOLDER = Pattern.compile("\\$\\{([A-Z_][A-Z0-9_]*)}");
     private static final int DEFAULT_CONNECT_SECONDS = 10;
     private static final int DEFAULT_READ_SECONDS = 60;
-    private static final String DEFAULT_SYSTEM_PROMPT =
-            """
-                    你是MapleCode，一个终端环境的AI编程助手。
-                    你擅长阅读代码、编写代码和调试问题。
-                    你会先思考再行动，每一步都解释你的推理过程。""";
 
     private ConfigLoader() {}
 
@@ -43,10 +39,8 @@ public final class ConfigLoader {
         String baseUrl = requireString(root, "base_url");
         String apiKey = expandEnv(requireString(root, "api_key"));
 
-        String systemPrompt = optionalString(root, "system_prompt");
-        if (systemPrompt == null || systemPrompt.isBlank()) {
-            systemPrompt = DEFAULT_SYSTEM_PROMPT;
-        }
+        String rawPrompt = optionalString(root, "system_prompt");
+        String yamlPrompt = (rawPrompt == null || rawPrompt.isBlank()) ? null : rawPrompt;
         ThinkingConfig thinking = parseThinking(optionalMap(root, "extended_thinking"));
 
         Map<?, ?> timeoutsMap = optionalMap(root, "timeouts");
@@ -55,8 +49,8 @@ public final class ConfigLoader {
         int read = timeoutsMap != null && timeoutsMap.get("read_seconds") instanceof Number n2
             ? n2.intValue() : DEFAULT_READ_SECONDS;
 
-        return new AppConfig(protocol, model, baseUrl, apiKey, systemPrompt,
-            thinking, new AppConfig.Timeouts(connect, read));
+        return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
+            List.of(), thinking, new AppConfig.Timeouts(connect, read));
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {

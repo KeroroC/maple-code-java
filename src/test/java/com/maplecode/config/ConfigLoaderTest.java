@@ -37,7 +37,7 @@ class ConfigLoaderTest {
         assertEquals("claude-sonnet-4-6", cfg.model());
         assertEquals("https://api.anthropic.com", cfg.baseUrl());
         assertEquals("sk-test-key", cfg.apiKey());
-        assertEquals("hi", cfg.systemPrompt());
+        assertEquals("hi", cfg.yamlPrompt());
         assertNotNull(cfg.thinking());
         assertEquals("ADAPTIVE", cfg.thinking().type().name());
         assertEquals("HIGH", cfg.thinking().effort().name());
@@ -46,7 +46,7 @@ class ConfigLoaderTest {
     }
 
     @Test
-    void minimal_config_uses_default_system_prompt(@TempDir Path tmp) throws IOException {
+    void minimal_config_has_null_yaml_prompt(@TempDir Path tmp) throws IOException {
         Files.writeString(tmp.resolve("config.yaml"), """
             protocol: openai
             model: gpt-4o
@@ -55,15 +55,16 @@ class ConfigLoaderTest {
             """);
         AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
         assertEquals("openai", cfg.protocol());
-        assertNotNull(cfg.systemPrompt());
-        assertTrue(cfg.systemPrompt().contains("MapleCode"));
+        assertNull(cfg.yamlPrompt());
+        assertNotNull(cfg.systemBlocks());
+        assertTrue(cfg.systemBlocks().isEmpty());
         assertNull(cfg.thinking());
         assertEquals(10, cfg.timeouts().connectSeconds());   // default
         assertEquals(60, cfg.timeouts().readSeconds());      // default
     }
 
     @Test
-    void blank_system_prompt_falls_back_to_default(@TempDir Path tmp) throws IOException {
+    void blank_system_prompt_results_in_null_yaml_prompt(@TempDir Path tmp) throws IOException {
         Files.writeString(tmp.resolve("config.yaml"), """
             protocol: anthropic
             model: claude-sonnet-4-6
@@ -72,8 +73,7 @@ class ConfigLoaderTest {
             system_prompt: "  "
             """);
         AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
-        assertNotNull(cfg.systemPrompt());
-        assertTrue(cfg.systemPrompt().contains("MapleCode"));
+        assertNull(cfg.yamlPrompt());   // 空白等同于 null，无 fallback 常量
     }
 
     @Test
