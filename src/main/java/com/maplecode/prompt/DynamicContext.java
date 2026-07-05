@@ -2,6 +2,7 @@ package com.maplecode.prompt;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -12,6 +13,7 @@ public record DynamicContext(
     String javaVersion,
     String mavenVersion,
     LocalDate date,
+    DayOfWeek dayOfWeek,
     LocalTime time
 ) {
     public static DynamicContext capture(Path cwd) {
@@ -20,8 +22,9 @@ public record DynamicContext(
             + " (" + System.getProperty("os.arch") + ")";
         String java = System.getProperty("java.version");
         String maven = detectMavenVersion();
+        LocalDate date = LocalDate.now();
         return new DynamicContext(cwd, git, os, java, maven,
-            LocalDate.now(), LocalTime.now().withNano(0));
+            date, date.getDayOfWeek(), LocalTime.now().withNano(0));
     }
 
     static String detectMavenVersion() {

@@ -35,6 +35,6 @@ public final class PromptAssembler {
         newMsgs.add(new ChatMessage(Role.USER,
             List.of(new ContentBlock.TextBlock(wrapped))));
         return new ChatRequest(req.model(), req.systemBlocks(), newMsgs,
-            req.thinking(), req.tools(), req.transientReminder());
+            req.thinking(), req.tools());
     }
 }

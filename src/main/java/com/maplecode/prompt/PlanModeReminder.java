@@ -20,7 +20,7 @@ public final class PlanModeReminder {
     public static Form decide(PlanMode mode, State state, int iteration) {
         if (mode != PlanMode.PLAN) return Form.NONE;
         if (state.fullInserts() == 0) return Form.FULL;
-        if (iteration - state.lastFullIteration > REPEAT_INTERVAL) return Form.FULL;
+        if (iteration - state.lastFullIteration >= REPEAT_INTERVAL) return Form.FULL;
         return Form.BRIEF;
     }
 

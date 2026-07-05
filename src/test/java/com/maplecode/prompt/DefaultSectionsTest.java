@@ -4,6 +4,7 @@ import com.maplecode.agent.PlanMode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -15,7 +16,7 @@ class DefaultSectionsTest {
     private static SectionContext ctx(PlanMode mode) {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "darwin (arm64)", "21.0.5", "3.9.6",
-            LocalDate.of(2026, 7, 5), LocalTime.of(10, 0));
+            LocalDate.of(2026, 7, 5), DayOfWeek.SATURDAY, LocalTime.of(10, 0));
         return new SectionContext(List.of(), env, mode);
     }
 
@@ -23,7 +24,7 @@ class DefaultSectionsTest {
     void fixedSectionsExistAndProduceNonEmptyText() {
         var sections = DefaultSections.standard(
             new DynamicContext(Path.of("/tmp"), false,
-                "x", "x", "x", LocalDate.now(), LocalTime.now()),
+                "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now()),
             List.of(), PlanMode.NORMAL, null);
         assertEquals(8, sections.size(),
             "应当恰好 8 个固定段：identity/constraints/task/action/tool/tone/text/env");
@@ -36,7 +37,7 @@ class DefaultSectionsTest {
     @Test
     void environmentIsCacheableFalse() {
         var env = new DynamicContext(Path.of("/tmp"), false,
-            "x", "x", "x", LocalDate.now(), LocalTime.now());
+            "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
         var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null);
         var envSection = sections.get(7);
         assertEquals("environment", envSection.kind());
@@ -47,7 +48,7 @@ class DefaultSectionsTest {
     @Test
     void taskModeVariesByPlanMode() {
         var env = new DynamicContext(Path.of("/tmp"), false,
-            "x", "x", "x", LocalDate.now(), LocalTime.now());
+            "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
         var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null);
         var taskMode = sections.get(2);
         assertEquals("task_mode", taskMode.kind());
@@ -58,7 +59,7 @@ class DefaultSectionsTest {
     @Test
     void customInstructionAppendedWhenProvided() {
         var env = new DynamicContext(Path.of("/tmp"), false,
-            "x", "x", "x", LocalDate.now(), LocalTime.now());
+            "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
         var nullCustom = DefaultSections.standard(env, List.of(),
             PlanMode.NORMAL, null);
         var withCustom = DefaultSections.standard(env, List.of(),

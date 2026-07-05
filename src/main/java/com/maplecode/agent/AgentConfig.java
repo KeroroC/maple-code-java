@@ -32,7 +32,7 @@ public record AgentConfig(
     }
 
     public static AgentConfig fromAppConfig(AppConfig app) {
-        return new AgentConfig(app.model(), List.of(), app.thinking(),
+        return new AgentConfig(app.model(), app.systemBlocks(), app.thinking(),
             25, 3, PlanMode.NORMAL, PlanModeReminder.State.initial());
     }
 

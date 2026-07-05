@@ -37,12 +37,23 @@ class PlanModeReminderTest {
     void planModeEveryFiveFullRepeat() {
         var s = PlanModeReminder.State.initial().afterFull(0);
         // iter 1..4: brief
-        // iter 5: still brief (5-0=5, REPEAT_INTERVAL=5, >= triggers)
-        assertEquals(PlanModeReminder.Form.BRIEF,
-            PlanModeReminder.decide(PlanMode.PLAN, s, 5));
-        // iter 6: full (6-0=6 >= 5)
+        for (int i = 1; i <= 4; i++) {
+            assertEquals(PlanModeReminder.Form.BRIEF,
+                PlanModeReminder.decide(PlanMode.PLAN, s, i), "iter=" + i);
+        }
+        // iter 5: full (5-0=5 >= REPEAT_INTERVAL=5)
         assertEquals(PlanModeReminder.Form.FULL,
-            PlanModeReminder.decide(PlanMode.PLAN, s, 6));
+            PlanModeReminder.decide(PlanMode.PLAN, s, 5));
+        // after full at iter 5, update state
+        var s2 = s.afterFull(5);
+        // iter 6..9: brief (relative to lastFull=5)
+        for (int i = 6; i <= 9; i++) {
+            assertEquals(PlanModeReminder.Form.BRIEF,
+                PlanModeReminder.decide(PlanMode.PLAN, s2, i), "iter=" + i);
+        }
+        // iter 10: full (10-5=5 >= REPEAT_INTERVAL=5)
+        assertEquals(PlanModeReminder.Form.FULL,
+            PlanModeReminder.decide(PlanMode.PLAN, s2, 10));
     }
 
     @Test

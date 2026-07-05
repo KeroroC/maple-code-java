@@ -43,6 +43,12 @@ public final class DefaultSections {
 
     public static final PromptSection ENVIRONMENT = new EnvSection();
 
+    /** v5 占位：已激活 Skill 段。本期 enabled()=false，不挂进 standard()。 */
+    public static final PromptSection ACTIVATED_SKILLS = new Section("activated_skills", "", true, false);
+
+    /** v5 占位：长期记忆段。本期 enabled()=false，不挂进 standard()。 */
+    public static final PromptSection LONG_TERM_MEMORY = new Section("long_term_memory", "", true, false);
+
     public static List<PromptSection> standard(DynamicContext env, List<Tool> tools,
                                                PlanMode planMode, String customInstruction) {
         List<PromptSection> list = new ArrayList<>(List.of(
@@ -112,7 +118,7 @@ public final class DefaultSections {
                  + "- Platform: " + e.platform() + "\n"
                  + "- Runtime: Java " + e.javaVersion()
                  + ", Maven " + e.mavenVersion() + "\n"
-                 + "- Date: " + e.date() + "\n"
+                 + "- Date: " + e.date() + " (" + e.dayOfWeek() + ")\n"
                  + "- Time: " + e.time();
         }
         @Override public boolean cacheable() { return false; }

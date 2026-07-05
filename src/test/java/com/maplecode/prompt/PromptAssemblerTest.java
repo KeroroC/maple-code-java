@@ -16,7 +16,8 @@ class PromptAssemblerTest {
 
     private static DynamicContext env() {
         return new DynamicContext(java.nio.file.Path.of("/tmp"), false,
-            "x", "x", "x", java.time.LocalDate.now(), java.time.LocalTime.now());
+            "x", "x", "x", java.time.LocalDate.now(), java.time.LocalDate.now().getDayOfWeek(),
+            java.time.LocalTime.now());
     }
 
     private static PromptSection fixed(String kind, boolean cacheable) {
