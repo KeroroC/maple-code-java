@@ -38,7 +38,8 @@ public final class ReplLoop {
         this.executor = new ToolExecutor(registry);
         this.session = new ChatSession();
         this.agentConfig = AgentConfig.fromAppConfig(appConfig);
-        this.agent = new AgentLoop(provider, registry, executor, session, agentConfig);
+        this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
+            u -> printer.usage(u));
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -89,7 +90,8 @@ public final class ReplLoop {
                     printer.error("/plan requires a query");
                     continue;
                 }
-                agentConfig = agentConfig.withPlanMode(PlanMode.PLAN);
+                agentConfig = agentConfig.withPlanMode(PlanMode.PLAN)
+                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 agent.run(query, printer);
                 printer.newline();
@@ -108,7 +110,8 @@ public final class ReplLoop {
                     continue;
                 }
                 agent.session().clear();
-                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL);
+                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL)
+                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 agent.run(planText, printer);
                 printer.newline();
@@ -118,7 +121,8 @@ public final class ReplLoop {
             // /cancel
             if (trimmed.equals("/cancel")) {
                 agent.cancel();
-                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL);
+                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL)
+                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 printer.info("cancelled");
                 continue;
