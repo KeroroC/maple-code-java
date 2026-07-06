@@ -296,7 +296,42 @@ LlmProvider / PermissionEngine / ToolExecutor / AgentLoop 不改。
 
 ### 6.2 手工 smoke（不写 IT 集成测试）
 
-附录步骤：装 `@modelcontextprotocol/server-filesystem`，写到 `~/.maplecode/mcp_servers.yaml`：`mvn package && java -jar target/maple-code-java-0.1.0.jar`，REPL 里调"列出我下载文件夹里的 txt 文件"，看返回。
+stdio：
+
+```bash
+npm install -g @modelcontextprotocol/server-filesystem
+# 写入 ~/.maplecode/mcp_servers.yaml：
+cat > ~/.maplecode/mcp_servers.yaml <<EOF
+servers:
+  fs:
+    type: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "$HOME/Downloads"]
+EOF
+mvn package
+java -jar target/maple-code-java-0.1.0.jar
+# REPL 里：list files matching *.txt in Downloads
+# 模型调用 mcp__fs__list_directory → 应该返回 Downloads 下的目录
+```
+
+http：起一个 echo server（如 smithers 之类），写到 `~/.maplecode/mcp_servers.yaml`：
+
+```yaml
+servers:
+  echo:
+    type: http
+    url: http://localhost:8080/mcp
+    headers:
+      X-Auth: "Bearer test"
+```
+
+跑同样 jar，REPL 里调模型 `mcp__echo__*` 验证。
+
+预期：
+
+- 模型在工具列表里看到 `mcp__fs__list_directory` 等
+- 调用返回非 `ToolResult.error`
+- Ctrl+C 退出 stdio 进程被 destroy
 
 ### 6.3 退出码
 
