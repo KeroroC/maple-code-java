@@ -23,31 +23,20 @@ public final class McpClient {
     private final String serverName;
     private final ObjectMapper m = new ObjectMapper();
     private final JsonRpc jsonRpc;
-    private final JsonRpc initRpc;
 
     private String serverInfo;
     private boolean capabilitiesHasTools;
     private String protocolVersion;
     private volatile List<McpToolDesc> cachedTools = List.of();
-    private final CompletableFuture<Void> ready = new CompletableFuture<>();
 
     public McpClient(McpTransport transport, String serverName,
                      Duration defaultTimeout) {
         this.transport = transport;
         this.serverName = serverName;
-        // initRpc uses a no-op sink so initialize/tools-list frames don't appear in transport.sent
-        this.initRpc = new JsonRpc(
-            frame -> CompletableFuture.completedFuture(null),
-            defaultTimeout);
-        // jsonRpc is used for tools/call and other post-init requests
         this.jsonRpc = new JsonRpc(
             frame -> transport.send(frame),
             defaultTimeout);
-        // Route inbound frames to both JsonRpc instances
-        this.transport.onInbound(frame -> {
-            initRpc.handle(frame);
-            jsonRpc.handle(frame);
-        });
+        this.transport.onInbound(jsonRpc::handle);
     }
 
     public void initialize() {
@@ -58,70 +47,45 @@ public final class McpClient {
                  "capabilities":{},
                  "clientInfo":{"name":"maplecode","version":"0.1.0"}}""");
         } catch (Exception e) { throw new IllegalStateException(e); }
-        initRpc.send("initialize", initParams).thenAccept(result -> {
-            try {
-                this.protocolVersion = textOr(result, "protocolVersion", null);
-                if (!SUPPORTED_PROTOCOL_VERSIONS.contains(protocolVersion)) {
-                    ready.completeExceptionally(new McpProtocolException(-32000,
-                        "unsupported protocol version: " + protocolVersion));
-                    return;
-                }
-                JsonNode caps = result.get("capabilities");
-                this.capabilitiesHasTools = caps != null && caps.has("tools");
-                if (!capabilitiesHasTools) {
-                    ready.completeExceptionally(new McpProtocolException(-32000,
-                        "server doesn't expose tools capability"));
-                    return;
-                }
-                JsonNode info = result.get("serverInfo");
-                this.serverInfo = info == null ? "" : info.toString();
-                // Fetch tools
-                initRpc.send("tools/list", null).thenAccept(toolsResult -> {
-                    try {
-                        JsonNode arr = toolsResult.get("tools");
-                        List<McpToolDesc> descs = new ArrayList<>();
-                        if (arr != null && arr.isArray()) {
-                            for (var n : arr) {
-                                descs.add(new McpToolDesc(
-                                    n.get("name").asText(),
-                                    n.path("description").asText(""),
-                                    n.get("inputSchema")));
-                            }
-                        }
-                        this.cachedTools = List.copyOf(descs);
-                        ready.complete(null);
-                    } catch (Exception e) {
-                        ready.completeExceptionally(
-                            new McpProtocolException(-32000, "tools/list failed: " + e.getMessage(), e));
-                    }
-                }).exceptionally(e -> {
-                    ready.completeExceptionally(
-                        new McpProtocolException(-32000, "tools/list failed: " + e.getMessage(), e));
-                    return null;
-                });
-            } catch (Exception e) {
-                ready.completeExceptionally(
-                    new McpProtocolException(-32000, "initialize failed: " + e.getMessage(), e));
-            }
-        }).exceptionally(e -> {
-            ready.completeExceptionally(
-                new McpProtocolException(-32000, "initialize failed: " + e.getMessage(), e));
-            return null;
-        });
+        var fut = jsonRpc.send("initialize", initParams);
+        try {
+            JsonNode result = fut.get(5, TimeUnit.SECONDS);
+            this.protocolVersion = textOr(result, "protocolVersion", null);
+            if (!SUPPORTED_PROTOCOL_VERSIONS.contains(protocolVersion))
+                throw new McpProtocolException(-32000,
+                    "unsupported protocol version: " + protocolVersion);
+            JsonNode caps = result.get("capabilities");
+            this.capabilitiesHasTools = caps != null && caps.has("tools");
+            if (!capabilitiesHasTools)
+                throw new McpProtocolException(-32000, "server doesn't expose tools capability");
+            JsonNode info = result.get("serverInfo");
+            this.serverInfo = info == null ? "" : info.toString();
+            jsonRpc.send("notifications/initialized", m.createObjectNode());
+        } catch (Exception e) {
+            throw new McpProtocolException(-32000, "initialize failed: " + e.getMessage(), e);
+        }
     }
 
     public List<McpToolDesc> cachedTools() {
         if (!cachedTools.isEmpty()) return cachedTools;
+        var fut = jsonRpc.send("tools/list", null);
         try {
-            ready.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            if (e instanceof java.util.concurrent.ExecutionException ee && ee.getCause() != null) {
-                if (ee.getCause() instanceof McpProtocolException mpe) throw mpe;
-                throw new McpProtocolException(-32000, "initialize failed: " + ee.getCause().getMessage(), ee.getCause());
+            JsonNode result = fut.get(5, TimeUnit.SECONDS);
+            JsonNode arr = result.get("tools");
+            List<McpToolDesc> descs = new ArrayList<>();
+            if (arr != null && arr.isArray()) {
+                for (var n : arr) {
+                    descs.add(new McpToolDesc(
+                        n.get("name").asText(),
+                        n.path("description").asText(""),
+                        n.get("inputSchema")));
+                }
             }
-            throw new McpProtocolException(-32000, "initialize failed: " + e.getMessage(), e);
+            this.cachedTools = List.copyOf(descs);
+            return cachedTools;
+        } catch (Exception e) {
+            throw new McpProtocolException(-32000, "tools/list failed: " + e.getMessage(), e);
         }
-        return cachedTools;
     }
 
     public CompletableFuture<McpCallResult> callToolFuture(String name, JsonNode arguments) {
@@ -177,7 +141,6 @@ public final class McpClient {
     public void close() {
         try { transport.close(null); } catch (Exception ignore) {}
         jsonRpc.close();
-        initRpc.close();
     }
 
     private static String textOr(JsonNode n, String f, String def) {

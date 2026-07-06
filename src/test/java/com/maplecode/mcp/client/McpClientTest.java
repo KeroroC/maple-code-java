@@ -35,24 +35,41 @@ class McpClientTest {
     FakeTransport t;
     McpClient client;
 
+    private JsonNode parse(String json) {
+        try { return m.readTree(json); }
+        catch (Exception e) { throw new RuntimeException(e); }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         t = new FakeTransport();
         client = new McpClient(t, "[gh]", Duration.ofSeconds(1));
+        // initialize() blocks on fut.get(); deliver response on background thread
+        CompletableFuture.runAsync(() -> {
+            try { Thread.sleep(50); } catch (InterruptedException ignore) {}
+            t.deliver(parse("""
+                {"jsonrpc":"2.0","id":1,"result":{
+                  "protocolVersion":"2025-06-18",
+                  "serverInfo":{"name":"gh","version":"1"},
+                  "capabilities":{"tools":{"listChanged":true}}
+                }}"""));
+        });
         client.initialize();
-        t.deliver(m.readTree("""
-            {"jsonrpc":"2.0","id":1,"result":{
-              "protocolVersion":"2025-06-18",
-              "serverInfo":{"name":"gh","version":"1"},
-              "capabilities":{"tools":{"listChanged":true}}
-            }}"""));
-        t.deliver(m.readTree("""
-            {"jsonrpc":"2.0","id":2,"result":{
-              "tools":[
-                {"name":"create_issue","description":"d","inputSchema":{"type":"object"}},
-                {"name":"list_repos","description":"d","inputSchema":{"type":"object"}}
-              ]
-            }}"""));
+        // cachedTools() blocks on fut.get(); deliver response on background thread
+        // id=3 because id=2 was used by notifications/initialized
+        CompletableFuture.runAsync(() -> {
+            try { Thread.sleep(50); } catch (InterruptedException ignore) {}
+            t.deliver(parse("""
+                {"jsonrpc":"2.0","id":3,"result":{
+                  "tools":[
+                    {"name":"create_issue","description":"d","inputSchema":{"type":"object"}},
+                    {"name":"list_repos","description":"d","inputSchema":{"type":"object"}}
+                  ]
+                }}"""));
+        });
+        client.cachedTools();
+        // drain all setup frames
+        t.sent.clear();
     }
 
     @Test
@@ -66,11 +83,13 @@ class McpClientTest {
     void unsupportedProtocolVersionThrows() throws Exception {
         FakeTransport t2 = new FakeTransport();
         var c = new McpClient(t2, "[x]", Duration.ofSeconds(1));
-        c.initialize();
-        t2.deliver(m.readTree("""
-            {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"1999-01-01",
-              "capabilities":{"tools":{}}}}"""));
-        assertThrows(McpProtocolException.class, c::cachedTools);
+        CompletableFuture.runAsync(() -> {
+            try { Thread.sleep(50); } catch (InterruptedException ignore) {}
+            t2.deliver(parse("""
+                {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"1999-01-01",
+                  "capabilities":{"tools":{}}}}"""));
+        });
+        assertThrows(McpProtocolException.class, c::initialize);
     }
 
     @Test
