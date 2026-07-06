@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 public sealed interface McpServerSpec
     permits McpServerSpec.Stdio, McpServerSpec.Http {
 
+    Pattern NAME_PATTERN = Pattern.compile("[a-zA-Z0-9_-]+");
+
     String name();
 
     record Stdio(
@@ -17,7 +19,6 @@ public sealed interface McpServerSpec
         List<String> args,
         Map<String, String> env
     ) implements McpServerSpec {
-        private static final Pattern NAME = Pattern.compile("[a-zA-Z0-9_-]+");
 
         public Stdio {
             validateName(name);
@@ -48,7 +49,7 @@ public sealed interface McpServerSpec
     static void validateName(String name) {
         if (name == null || name.isEmpty() || name.length() > 32)
             throw new ConfigException("mcp server name must be 1-32 chars: " + name);
-        if (!Stdio.NAME.matcher(name).matches())
+        if (!NAME_PATTERN.matcher(name).matches())
             throw new ConfigException("mcp server name must match [a-zA-Z0-9_-]+: " + name);
     }
 }
