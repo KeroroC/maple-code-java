@@ -3,6 +3,7 @@ package com.maplecode.permission;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,27 +47,30 @@ public final class HitlCheck implements PermissionCheck {
         output.println("  参数:    " + summarizeArgs(req));
         output.println("  模式:    " + ctx.mode());
         output.println("");
-        output.println("  [1] 本次允许");
-        output.println("  [2] 本会话允许");
-        output.println("  [3] 本项目允许（写入 permissions.local.yaml）");
-        output.println("  [4] 拒绝");
-        output.println("");
-        String choice;
+
+        var options = List.of(
+            "本次允许",
+            "本会话允许",
+            "本项目允许（写入 permissions.local.yaml）",
+            "拒绝"
+        );
+
+        int choice;
         try {
-            choice = input.readLine("  请选择 [1-4]: ").trim();
+            choice = input.readChoice("  上下箭头选择，回车确认:", options);
         } catch (RuntimeException e) {
             return Optional.of(Decision.deny("用户在权限确认时中断"));
         }
 
         return switch (choice) {
-            case "1" -> Optional.of(Decision.allow("用户本次允许"));
-            case "2" -> {
+            case 0 -> Optional.of(Decision.allow("用户本次允许"));
+            case 1 -> {
                 if (pattern != null && engine != null) {
                     engine.permitForSession(new ToolCall(req.toolName(), pattern));
                 }
                 yield Optional.of(Decision.allow("用户本会话允许"));
             }
-            case "3" -> {
+            case 2 -> {
                 if (pattern != null && engine != null) {
                     try {
                         Path cwd = Paths.get(System.getProperty("user.dir"));
@@ -79,8 +83,8 @@ public final class HitlCheck implements PermissionCheck {
                 }
                 yield Optional.of(Decision.allow("用户本项目允许"));
             }
-            case "4" -> Optional.of(Decision.deny("用户拒绝"));
-            default  -> Optional.of(Decision.deny("无效选项 '" + choice + "'，默认拒绝"));
+            case 3 -> Optional.of(Decision.deny("用户拒绝"));
+            default -> Optional.of(Decision.deny("无效选项，默认拒绝"));
         };
     }
 

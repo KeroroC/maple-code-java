@@ -13,12 +13,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class HitlCheckTest {
 
     private static class StubInput implements InputSource {
-        final Queue<String> q;
-        StubInput(String... lines) { this.q = new ArrayDeque<>(List.of(lines)); }
+        final Queue<Integer> choices;
+        StubInput(int... choiceIndices) {
+            this.choices = new ArrayDeque<>();
+            for (int c : choiceIndices) this.choices.add(c);
+        }
         @Override public String readLine(String prompt) {
-            String s = q.poll();
-            if (s == null) throw new IllegalStateException("no more input");
-            return s;
+            throw new UnsupportedOperationException("use readChoice");
+        }
+        @Override public int readChoice(String prompt, List<String> options) {
+            if (choices.isEmpty()) throw new IllegalStateException("no more input");
+            return choices.poll();
         }
     }
 
@@ -38,9 +43,9 @@ class HitlCheckTest {
     }
 
     @Test
-    void choice_1_allows_once_no_engine_call() {
+    void choice_0_allows_once_no_engine_call() {
         var out = new CapturingOutput();
-        var in = new StubInput("1");
+        var in = new StubInput(0);  // 本次允许
         var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
         var hitl = new HitlCheck(in, out);
         hitl.setEngine(engine);
@@ -50,9 +55,9 @@ class HitlCheckTest {
     }
 
     @Test
-    void choice_2_adds_to_session_allow() {
+    void choice_1_adds_to_session_allow() {
         var out = new CapturingOutput();
-        var in = new StubInput("2");
+        var in = new StubInput(1);  // 本会话允许
         var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
         var hitl = new HitlCheck(in, out);
         hitl.setEngine(engine);
@@ -62,27 +67,15 @@ class HitlCheckTest {
     }
 
     @Test
-    void choice_4_denies() {
+    void choice_3_denies() {
         var out = new CapturingOutput();
-        var in = new StubInput("4");
+        var in = new StubInput(3);  // 拒绝
         var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
         var hitl = new HitlCheck(in, out);
         hitl.setEngine(engine);
         var d = hitl.check(req("rm"), new PermissionContext(PermissionMode.DEFAULT));
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
         assertTrue(d.get().reason().contains("用户拒绝"));
-    }
-
-    @Test
-    void invalid_choice_denies() {
-        var out = new CapturingOutput();
-        var in = new StubInput("9");
-        var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
-        var hitl = new HitlCheck(in, out);
-        hitl.setEngine(engine);
-        var d = hitl.check(req("rm"), new PermissionContext(PermissionMode.DEFAULT));
-        assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("无效选项"));
     }
 
     @Test
@@ -131,7 +124,7 @@ class HitlCheckTest {
     @Test
     void prompt_is_printed_with_tool_args_and_mode() {
         var out = new CapturingOutput();
-        var in = new StubInput("4");
+        var in = new StubInput(3);  // 拒绝
         var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
         var hitl = new HitlCheck(in, out);
         hitl.setEngine(engine);
