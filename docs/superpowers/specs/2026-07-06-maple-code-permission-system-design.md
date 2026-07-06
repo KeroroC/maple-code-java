@@ -131,30 +131,37 @@ public final class ToolExecutor {
 
 ### 2.4 修改 `App.java`
 
+`HitlCheck` 需要 engine 引用来调 `permitForSession` / `persistProjectAllow`，但 engine 构造时又需要 HitlCheck——这是循环依赖。**解决方案**：构造期 HitlCheck 拿一个 `setEngine` 后置 setter；engine 构造完后调一次 `hitlCheck.setEngine(engine)`。
+
 ```java
 public static void main(String[] args) throws Exception {
     // ... 现有 config/provider/registry 加载 ...
 
     RuleSet ruleSet = PermissionFileLoader.loadAll(cwd);
     PermissionMode mode = raw.permissionMode();
+
+    HitlCheck hitlCheck = new HitlCheck(input, output);
     PermissionEngine engine = new PermissionEngine(List.of(
         new BlacklistCheck(),
         new SandboxCheck(cwd),
         new RuleCheck(ruleSet),
         new ModeCheck(),
-        new HitlCheck(input, output, engine)  // engine 引用——构造期自指
+        hitlCheck
     ), mode);
+    hitlCheck.setEngine(engine);  // 后置注入打破循环
 
     ToolExecutor executor = new ToolExecutor(registry, engine);
-    // ... 现有 ReplLoop 构造 ...
+    ReplLoop repl = new ReplLoop(raw, provider, printer, lineReader,
+        registry, executor, engine, agentConfig);  // + engine 参数
+    repl.run();
 }
 ```
 
-`HitlCheck` 构造期需要 engine 引用以调 `permitForSession` / `persistProjectAllow`；这是合理的自指——engine 暴露这两个方法时检查「回调时 engine 已构造完」即可。
+`HitlCheck.check()` 在调用 `engine.permitForSession` / `engine.persistProjectAllow` 前必须确保 `setEngine` 已调用——否则 NPE。`engine.check()` 不会回调 HitlCheck 自己调 HitlCheck 之前 engine 已经构造完，setEngine 一定先完成。
 
 ### 2.5 修改 `ReplLoop.java`
 
-新增 `/mode` 命令分支（详见 §6）。
+新增 `/mode` 命令分支（详见 §6.3）。ReplLoop 构造器增加 `PermissionEngine engine` 参数。
 
 ---
 
@@ -524,7 +531,13 @@ public void persistProjectAllow(String tool, String pattern) throws IOException 
     String entry = String.format(
         "  - tool: %s%n    pattern: %s%n    action: allow%n",
         tool, escapeYamlString(pattern));
-    Files.writeString(file, entry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    boolean isNew = !Files.exists(file);
+    if (isNew) {
+        // 文件不存在则先写 rules: 头再加条目，保证 YAML 合法
+        Files.writeString(file, "rules:\n" + entry, StandardOpenOption.CREATE);
+    } else {
+        Files.writeString(file, entry, StandardOpenOption.APPEND);
+    }
 }
 
 private static String escapeYamlString(String s) {
@@ -687,7 +700,7 @@ src/test/java/com/maplecode/config/
 - [ ] 写 local.yaml 失败（权限拒绝目录）→ 降级到 session allow + warning
 - [ ] 规则引用未知 tool（如 `Bash(git *)`）→ 启动报 ConfigException 退出码 78
 - [ ] `permission_mode: invalid` → 启动报 ConfigException 退出码 78
-- [ ] 并发：100 个并发 thread 各加 100 个 session allow，最终 size = 10000
+- [ ] 并发：100 个并发 thread 各加 100 个 session allow，最终 size = 10000（`engine.permitForSession` 内部用 `ConcurrentHashMap.newKeySet()`）
 - [ ] pom 依赖不变（snakeyaml 已在 classpath；无新依赖）
 
 ---
@@ -699,11 +712,13 @@ src/test/java/com/maplecode/config/
 | 五层独立 `PermissionCheck` 接口而非一条规则链 | HITL（带交互）、黑名单（不可配置）天然不适合塞进通用规则 |
 | `PermissionCheck` 非 sealed | 同 Tool 的理由——单测要匿名 mock |
 | `PermissionContext` per-call 新建 | 避免 Batch.partition() 的 parallelStream 撞共享可变状态 |
-| Master state 在 `PermissionEngine` 内部（`ConcurrentHashMap.newKeySet()`） | per-call ctx 是视图，写操作走 engine thread-safe set |
+| Master state 在 `PermissionEngine` 内部（`sessionAllow` / `sessionDeny` 都是 `ConcurrentHashMap.newKeySet()`） | per-call ctx 是视图，写操作走 engine thread-safe set |
 | `mode` 用 `volatile` 而非锁 | stale read 顶多让一次 check 用旧 mode，可接受 |
 | glob/grep pattern 用 `normalize()` 前缀判断而非 `toRealPath()` | pattern 不是具体文件，toRealPath 无意义 |
 | 路径不存在 → empty，让工具层报错 | 沙箱只关心「存在但越界」 |
 | 写 local.yaml 用 line append 而非 snakeyaml dump | 避免 dump 重排其他条目，git diff 友好 |
+| 写 local.yaml 时若文件不存在则先写 `rules:\n` 头 | 保证新文件就是合法 YAML |
+| HitlCheck 用 setEngine 后置注入打破构造期循环 | engine 构造需要 HitlCheck；HitlCheck 又需要 engine 引用 |
 | exec 用自实现 shell glob 而非 `PathMatcher` | exec 命令含空格，`PathMatcher` 不适合匹配整串 |
 | 黑名单 regex 用 `.find()` 而非 `.matches()` | 危险模式出现在命令任意位置都应拦 |
 | `/mode` 不持久化 | 避免「忘了切回 strict」类的隐式行为 |
