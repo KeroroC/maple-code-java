@@ -113,6 +113,23 @@ class McpServerConfigLoaderTest {
     }
 
     @Test
+    void enabledFalseCaseInsensitive(@TempDir Path tmp) throws Exception {
+        for (String falsy : new String[]{"\"False\"", "\"FALSE\"", "\"no\"", "\"off\"", "\"0\""}) {
+            Path userFile = tmp.resolve("mcp_servers.yaml");
+            Files.writeString(userFile, """
+                servers:
+                  gh:
+                    type: http
+                    url: https://mcp.example.com/mcp
+                    enabled: %s
+                """.formatted(falsy));
+            var specs = new McpServerConfigLoader().loadAll(tmp, userFile);
+            assertFalse(specs.get(0).enabled(),
+                "enabled: " + falsy + " should be disabled");
+        }
+    }
+
+    @Test
     void enabledTrueByDefault(@TempDir Path tmp) throws Exception {
         Path userFile = tmp.resolve("mcp_servers.yaml");
         Files.writeString(userFile, """

@@ -75,7 +75,7 @@ public final class McpServerConfigLoader {
 
     private static McpServerSpec parseEntry(String name, Map<String, Object> v) {
         warnUnknownKeys(name, v);
-        boolean enabled = !"false".equals(String.valueOf(v.getOrDefault("enabled", "true")));
+        boolean enabled = ConfigLoader.isEnabled(v.get("enabled"));
         String type = stringOrThrow(name, v, "type");
         switch (type) {
             case "stdio" -> {

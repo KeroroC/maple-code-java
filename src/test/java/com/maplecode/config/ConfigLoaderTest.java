@@ -168,6 +168,23 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void mcp_servers_disabled_case_insensitive(@TempDir Path tmp) throws IOException {
+        for (String falsy : new String[]{"\"False\"", "\"FALSE\"", "\"no\"", "\"off\"", "\"0\""}) {
+            Files.writeString(tmp.resolve("config.yaml"), """
+                protocol: anthropic
+                model: claude-sonnet-4-6
+                base_url: https://api.anthropic.com
+                api_key: sk-test
+                mcp_servers:
+                  enabled: %s
+                """.formatted(falsy));
+            AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+            assertFalse(cfg.mcpConfig().enabled(),
+                "enabled: " + falsy + " should be disabled");
+        }
+    }
+
+    @Test
     void mcp_servers_absent_returns_null(@TempDir Path tmp) throws IOException {
         Files.writeString(tmp.resolve("config.yaml"), """
             protocol: anthropic

@@ -107,13 +107,21 @@ public final class ConfigLoader {
         return new ThinkingConfig(type, budget, effort);
     }
 
+    private static final java.util.Set<String> FALSY =
+        java.util.Set.of("false", "no", "off", "0");
+
     private static AppConfig.McpConfig parseMcpConfig(Map<?, ?> m) {
         if (m == null) return null;  // 未配置 mcp_servers 块
-        Object enabledVal = m.get("enabled");
-        boolean enabled = enabledVal == null || !"false".equals(enabledVal.toString());
+        boolean enabled = isEnabled(m.get("enabled"));
         int timeout = m.get("startup_timeout_ms") instanceof Number n
             ? n.intValue() : AppConfig.McpConfig.DEFAULT_STARTUP_TIMEOUT_MS;
         return new AppConfig.McpConfig(enabled, timeout);
+    }
+
+    /** 判断 YAML enabled 字段是否为真值（null 视为 true；"false"/"no"/"off"/"0" 大小写不敏感视为 false）。 */
+    public static boolean isEnabled(Object val) {
+        if (val == null) return true;
+        return !FALSY.contains(val.toString().toLowerCase());
     }
 
     public static String expandEnv(String value) {
