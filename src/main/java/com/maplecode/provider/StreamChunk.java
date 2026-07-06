@@ -31,7 +31,7 @@ public sealed interface StreamChunk
      *   ToolUseStart  → 工具被声明（id + name）
      *   ToolUseDelta  → 参数 JSON 碎片（partialJson）
      *   ToolUseEnd    → 工具参数完整，input 是解析后的 JsonNode
-     *
+     * <p>
      * Anthropic 的 content_block_start/delta/stop 拆成这三段。
      * OpenAI 的 delta.tool_calls 同构映射（按 tool_calls 数组 index 跟踪）。
      */

@@ -51,6 +51,7 @@ public final class DefaultSections {
 
     public static List<PromptSection> standard(DynamicContext env, List<Tool> tools,
                                                PlanMode planMode, String customInstruction) {
+        // 当前设计的缓存命中率依赖这里的明确顺序，如果将ENVIRONMENT这样的动态内容放到TEXT_OUTPUT前面会导致缓存命中率几乎为0
         List<PromptSection> list = new ArrayList<>(List.of(
             IDENTITY, SYSTEM_CONSTRAINTS, TASK_MODE, ACTION_EXECUTION,
             TOOL_USAGE, TONE_STYLE, TEXT_OUTPUT, ENVIRONMENT));
@@ -95,7 +96,7 @@ public final class DefaultSections {
         @Override public String render(SectionContext ctx) {
             StringBuilder toolNames = new StringBuilder();
             for (var t : ctx.tools()) {
-                if (toolNames.length() > 0) toolNames.append(", ");
+                if (!toolNames.isEmpty()) toolNames.append(", ");
                 toolNames.append(t.name());
             }
             return "工具使用约定：\n"

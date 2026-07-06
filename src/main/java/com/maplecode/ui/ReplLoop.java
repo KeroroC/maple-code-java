@@ -39,7 +39,7 @@ public final class ReplLoop {
         this.session = new ChatSession();
         this.agentConfig = agentConfig;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
-            u -> printer.usage(u));
+                printer::usage);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -52,6 +52,7 @@ public final class ReplLoop {
         while (true) {
             String input;
             try {
+                // 阻塞式读取用户输入
                 input = readMultiline();
             } catch (UserInterruptException e) {
                 // Ctrl-C during input: cancel any running agent
@@ -160,6 +161,7 @@ public final class ReplLoop {
     private String readMultiline() {
         String first;
         try {
+            // 阻塞调用
             first = reader.readLine("> ");
         } catch (UserInterruptException e) {
             throw e;
