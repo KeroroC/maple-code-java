@@ -105,7 +105,7 @@ public final class ConfigLoader {
         return new ThinkingConfig(type, budget, effort);
     }
 
-    static String expandEnv(String value) {
+    public static String expandEnv(String value) {
         Matcher matcher = ENV_PLACEHOLDER.matcher(value);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
