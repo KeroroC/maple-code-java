@@ -8,12 +8,17 @@ import java.util.Set;
 
 public final class ToolRegistry {
 
-    private static final Set<String> READ_ONLY = Set.of("read_file", "glob", "grep");
+    private static final Set<String> READ_ONLY_DEFAULT = Set.of("read_file", "glob", "grep");
 
     private final List<Tool> tools;
     private final Map<String, Tool> byName;
+    private final Set<String> readOnlyNames;
 
     public ToolRegistry(List<Tool> tools) {
+        this(tools, READ_ONLY_DEFAULT);
+    }
+
+    public ToolRegistry(List<Tool> tools, Set<String> readOnlyNames) {
         this.tools = List.copyOf(tools);
         this.byName = new HashMap<>();
         for (var t : this.tools) {
@@ -22,6 +27,7 @@ public final class ToolRegistry {
             }
             byName.put(t.name(), t);
         }
+        this.readOnlyNames = Set.copyOf(readOnlyNames);
     }
 
     public List<Tool> all() {
@@ -33,10 +39,10 @@ public final class ToolRegistry {
     }
 
     public boolean isReadOnly(String name) {
-        return READ_ONLY.contains(name);
+        return readOnlyNames.contains(name);
     }
 
     public List<Tool> readOnly() {
-        return tools.stream().filter(t -> READ_ONLY.contains(t.name())).toList();
+        return tools.stream().filter(t -> readOnlyNames.contains(t.name())).toList();
     }
 }
