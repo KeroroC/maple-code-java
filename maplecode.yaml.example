@@ -33,3 +33,9 @@ timeouts:
 agent:
   max_iterations: 50           # 单轮对话最大工具调用轮数（默认 50）
   max_consecutive_unknown: 3   # 连续调用未知工具达到此次数后停止（默认 3）
+
+# MCP（Model Context Protocol）server 列表。默认开启。
+# 详细三层叠加规则：见 docs/superpowers/specs/2026-07-06-maple-code-mcp-client-design.md
+mcp_servers:
+  enabled: true
+  startup_timeout_ms: 5000

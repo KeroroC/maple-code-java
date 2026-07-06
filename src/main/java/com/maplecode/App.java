@@ -4,6 +4,11 @@ import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
+import com.maplecode.mcp.adapter.McpToolAdapter;
+import com.maplecode.mcp.client.McpClient;
+import com.maplecode.mcp.client.McpClientBootstrap;
+import com.maplecode.mcp.config.McpServerConfigLoader;
+import com.maplecode.mcp.config.McpServerSpec;
 import com.maplecode.permission.BlacklistCheck;
 import com.maplecode.permission.HitlCheck;
 import com.maplecode.permission.JLineInputSource;
@@ -26,6 +31,7 @@ import com.maplecode.tool.ExecTool;
 import com.maplecode.tool.GlobTool;
 import com.maplecode.tool.GrepTool;
 import com.maplecode.tool.ReadFileTool;
+import com.maplecode.tool.Tool;
 import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
 import com.maplecode.tool.WriteFileTool;
@@ -35,7 +41,11 @@ import com.maplecode.ui.StreamPrinter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 public final class App {
 
@@ -50,18 +60,39 @@ public final class App {
             System.exit(78);
         }
         AppConfig raw = ConfigLoader.load(configPath);
+        Path cwd = Paths.get(System.getProperty("user.dir"));
+
+        // === MCP server 装配 ===
+        Path userMcpFile = Paths.get(System.getProperty("user.home"),
+                                      ".maplecode", "mcp_servers.yaml");
+        List<McpServerSpec> specs = new McpServerConfigLoader().loadAll(cwd, userMcpFile);
+        Map<String, McpClient> clients;
+        if (specs.isEmpty()) {
+            clients = Map.of();
+        } else {
+            clients = new McpClientBootstrap(Duration.ofSeconds(5)).start(specs);
+        }
+
         LlmProvider provider = new ProviderRegistry().create(raw);
-        ToolRegistry registry = new ToolRegistry(List.of(
-            new ReadFileTool(),
-            new WriteFileTool(),
-            new EditFileTool(),
-            new ExecTool(),
-            new GlobTool(),
-            new GrepTool()
-        ));
+
+        List<Tool> builtins = List.of(
+            new ReadFileTool(), new WriteFileTool(), new EditFileTool(),
+            new ExecTool(),    new GlobTool(),     new GrepTool());
+        List<Tool> mcpTools = clients.values().stream()
+            .flatMap(c -> {
+                try {
+                    return c.cachedTools().stream()
+                        .map(t -> McpToolAdapter.of(c, t));
+                } catch (Exception e) {
+                    System.err.println("[mcp:" + c.name() + "] WARN: " + e.getMessage());
+                    return Stream.empty();
+                }
+            }).toList();
+        List<Tool> allTools = new ArrayList<>(builtins);
+        allTools.addAll(mcpTools);
+        ToolRegistry registry = new ToolRegistry(allTools);
 
         // Permission engine
-        Path cwd = Paths.get(System.getProperty("user.dir"));
         Path userPermFile = Paths.get(System.getProperty("user.home"), ".maplecode", "permissions.yaml");
         RuleSet ruleSet = PermissionFileLoader.loadAll(cwd, userPermFile);
 
@@ -80,6 +111,12 @@ public final class App {
         hitlCheck.setEngine(engine);
 
         ToolExecutor executor = new ToolExecutor(registry, engine);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (var c : clients.values()) {
+                try { c.close(); } catch (Exception ignore) {}
+            }
+        }, "mcp-shutdown"));
 
         // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);
