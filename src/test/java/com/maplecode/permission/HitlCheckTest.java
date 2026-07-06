@@ -32,6 +32,11 @@ class HitlCheckTest {
             new ObjectMapper().createObjectNode().put("command", command), Path.of("/tmp"));
     }
 
+    private static PermissionRequest readReq(String path) {
+        return new PermissionRequest("read_file",
+            new ObjectMapper().createObjectNode().put("path", path), Path.of("/tmp"));
+    }
+
     @Test
     void choice_1_allows_once_no_engine_call() {
         var out = new CapturingOutput();
@@ -108,6 +113,19 @@ class HitlCheckTest {
         var d = hitl.check(req("rm"), ctx);
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
         assertTrue(d.get().reason().contains("会话级拒绝"));
+    }
+
+    @Test
+    void readonly_tool_auto_allows_without_prompt() {
+        var out = new CapturingOutput();
+        var in = new StubInput();  // 无输入——若被问到就抛
+        var engine = new PermissionEngine(List.of(), PermissionMode.DEFAULT);
+        var hitl = new HitlCheck(in, out);
+        hitl.setEngine(engine);
+        var d = hitl.check(readReq("src/Main.java"), new PermissionContext(PermissionMode.DEFAULT));
+        assertEquals(Decision.Verdict.ALLOW, d.orElseThrow().verdict());
+        assertTrue(d.get().reason().contains("只读工具"));
+        assertTrue(out.lines.isEmpty(), "不应弹 prompt");
     }
 
     @Test

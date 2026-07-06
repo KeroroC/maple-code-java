@@ -4,8 +4,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
+import java.util.Set;
 
 public final class HitlCheck implements PermissionCheck {
+
+    /** 只读工具：沙箱已防护路径越界，DEFAULT 模式下自动放行不弹 prompt。 */
+    private static final Set<String> READ_ONLY = Set.of("read_file", "glob", "grep");
 
     private final InputSource input;
     private final OutputSink output;
@@ -29,6 +33,11 @@ public final class HitlCheck implements PermissionCheck {
                 return Optional.of(Decision.allow("会话级允许"));
             if (ctx.sessionDenies().contains(tc))
                 return Optional.of(Decision.deny("会话级拒绝"));
+        }
+
+        // DEFAULT 模式下只读工具自动放行（沙箱已在上游拦截越界路径）
+        if (READ_ONLY.contains(req.toolName())) {
+            return Optional.of(Decision.allow("只读工具自动放行"));
         }
 
         output.println("");
