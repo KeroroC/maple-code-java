@@ -4,6 +4,8 @@ import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.config.AppConfig;
+import com.maplecode.permission.PermissionEngine;
+import com.maplecode.permission.PermissionMode;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
@@ -24,18 +26,21 @@ public final class ReplLoop {
     private final LineReader reader;
     private final ToolRegistry registry;
     private final ToolExecutor executor;
+    private final PermissionEngine engine;
     private final ChatSession session;
     private final AgentLoop agent;
     private AgentConfig agentConfig;
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
-                    LineReader reader, ToolRegistry registry, AgentConfig agentConfig) {
+                    LineReader reader, ToolRegistry registry, ToolExecutor executor,
+                    PermissionEngine engine, AgentConfig agentConfig) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
         this.reader = reader;
         this.registry = registry;
-        this.executor = new ToolExecutor(registry);
+        this.executor = executor;
+        this.engine = engine;
         this.session = new ChatSession();
         this.agentConfig = agentConfig;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
@@ -48,7 +53,7 @@ public final class ReplLoop {
     }
 
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/tools 列出工具，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
+        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
         while (true) {
             String input;
             try {
@@ -114,6 +119,20 @@ public final class ReplLoop {
                 agent.updateConfig(agentConfig);
                 agent.run(planText, printer);
                 printer.newline();
+                continue;
+            }
+
+            // /mode
+            if (trimmed.equals("/mode") || trimmed.startsWith("/mode ")) {
+                String arg = trimmed.length() > 5 ? trimmed.substring(6).trim() : "";
+                switch (arg) {
+                    case "strict", "default", "permissive" -> {
+                        engine.setMode(PermissionMode.valueOf(arg.toUpperCase()));
+                        printer.info("mode -> " + arg);
+                    }
+                    case "" -> printer.info("current mode: " + engine.mode());
+                    default  -> printer.error("/mode <strict|default|permissive>");
+                }
                 continue;
             }
 

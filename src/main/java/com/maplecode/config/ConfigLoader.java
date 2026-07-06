@@ -1,6 +1,7 @@
 package com.maplecode.config;
 
 import com.maplecode.error.ConfigException;
+import com.maplecode.permission.PermissionMode;
 import com.maplecode.provider.ThinkingConfig;
 import org.yaml.snakeyaml.Yaml;
 
@@ -49,8 +50,17 @@ public final class ConfigLoader {
         int read = timeoutsMap != null && timeoutsMap.get("read_seconds") instanceof Number n2
             ? n2.intValue() : DEFAULT_READ_SECONDS;
 
+        String modeStr = optionalString(root, "permission_mode");
+        PermissionMode mode = switch (modeStr == null ? "default" : modeStr) {
+            case "strict"     -> PermissionMode.STRICT;
+            case "default"    -> PermissionMode.DEFAULT;
+            case "permissive" -> PermissionMode.PERMISSIVE;
+            default -> throw new ConfigException(
+                "permission_mode must be strict|default|permissive, got: " + modeStr);
+        };
+
         return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
-            List.of(), thinking, new AppConfig.Timeouts(connect, read));
+            List.of(), thinking, new AppConfig.Timeouts(connect, read), mode);
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {

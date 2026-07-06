@@ -4,6 +4,16 @@ import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
+import com.maplecode.permission.BlacklistCheck;
+import com.maplecode.permission.HitlCheck;
+import com.maplecode.permission.JLineInputSource;
+import com.maplecode.permission.ModeCheck;
+import com.maplecode.permission.PermissionEngine;
+import com.maplecode.permission.PermissionFileLoader;
+import com.maplecode.permission.PrintStreamOutputSink;
+import com.maplecode.permission.RuleCheck;
+import com.maplecode.permission.RuleSet;
+import com.maplecode.permission.SandboxCheck;
 import com.maplecode.prompt.DefaultSections;
 import com.maplecode.prompt.DynamicContext;
 import com.maplecode.prompt.PlanModeReminder;
@@ -16,6 +26,7 @@ import com.maplecode.tool.ExecTool;
 import com.maplecode.tool.GlobTool;
 import com.maplecode.tool.GrepTool;
 import com.maplecode.tool.ReadFileTool;
+import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
 import com.maplecode.tool.WriteFileTool;
 import com.maplecode.ui.ReplLoop;
@@ -49,8 +60,28 @@ public final class App {
             new GrepTool()
         ));
 
-        // 启动期组装 systemBlocks
+        // Permission engine
         Path cwd = Paths.get(System.getProperty("user.dir"));
+        Path userPermFile = Paths.get(System.getProperty("user.home"), ".maplecode", "permissions.yaml");
+        RuleSet ruleSet = PermissionFileLoader.loadAll(cwd, userPermFile);
+
+        var reader = buildLineReader();
+        HitlCheck hitlCheck = new HitlCheck(
+            new JLineInputSource(reader),
+            new PrintStreamOutputSink(System.out));
+        PermissionEngine engine = new PermissionEngine(
+            List.of(
+                new BlacklistCheck(),
+                new SandboxCheck(cwd),
+                new RuleCheck(ruleSet),
+                new ModeCheck(),
+                hitlCheck),
+            raw.permissionMode());
+        hitlCheck.setEngine(engine);
+
+        ToolExecutor executor = new ToolExecutor(registry, engine);
+
+        // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);
         var tools = registry.all();
         var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL, raw.yamlPrompt());
@@ -62,7 +93,7 @@ public final class App {
             25, 3, PlanMode.NORMAL, PlanModeReminder.State.initial());
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
-            buildLineReader(), registry, agentConfig);
+            reader, registry, executor, engine, agentConfig);
         repl.run();
     }
 

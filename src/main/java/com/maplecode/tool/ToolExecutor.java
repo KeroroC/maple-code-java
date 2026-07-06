@@ -2,15 +2,25 @@ package com.maplecode.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.maplecode.error.ToolException;
+import com.maplecode.permission.Decision;
+import com.maplecode.permission.PermissionEngine;
+import com.maplecode.permission.PermissionRequest;
 
+import java.nio.file.Path;
 import java.util.stream.Collectors;
 
 public final class ToolExecutor {
 
     private final ToolRegistry registry;
+    private final PermissionEngine engine;  // nullable
 
     public ToolExecutor(ToolRegistry registry) {
+        this(registry, null);
+    }
+
+    public ToolExecutor(ToolRegistry registry, PermissionEngine engine) {
         this.registry = registry;
+        this.engine = engine;
     }
 
     /**
@@ -24,9 +34,18 @@ public final class ToolExecutor {
                 .collect(Collectors.joining(", "));
             return ToolResult.error("Unknown tool: " + name + ". Available: " + available);
         }
+
+        if (engine != null) {
+            Path cwd = Path.of(System.getProperty("user.dir"));
+            Decision decision = engine.check(new PermissionRequest(name, args, cwd));
+            if (decision.verdict() == Decision.Verdict.DENY) {
+                return ToolResult.error("permission denied: " + decision.reason());
+            }
+        }
+
         try {
             // 缺 ctx 也要兜底：构造一个默认 ctx，cwd=.，保守限
-            ToolContext ctx = ToolContext.defaults(java.nio.file.Path.of(System.getProperty("user.dir")));
+            ToolContext ctx = ToolContext.defaults(Path.of(System.getProperty("user.dir")));
             return toolOpt.get().execute(args, ctx);
         } catch (ToolException e) {
             return ToolResult.error(e.getMessage());
