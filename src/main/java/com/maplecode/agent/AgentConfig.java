@@ -27,18 +27,25 @@ public record AgentConfig(
     }
 
     public static AgentConfig defaults() {
-        return new AgentConfig("test-model", List.of(), null, 25, 3,
+        return new AgentConfig("test-model", List.of(), null, 50, 3,
             PlanMode.NORMAL, PlanModeReminder.State.initial());
     }
 
     public static AgentConfig fromAppConfig(AppConfig app) {
+        var limits = app.agentLimits();
         return new AgentConfig(app.model(), app.systemBlocks(), app.thinking(),
-            25, 3, PlanMode.NORMAL, PlanModeReminder.State.initial());
+            limits.maxIterations(), limits.maxConsecutiveUnknown(),
+            PlanMode.NORMAL, PlanModeReminder.State.initial());
     }
 
     public AgentConfig withReminderState(PlanModeReminder.State state) {
         return new AgentConfig(model, systemBlocks, thinking,
             maxIterations, maxConsecutiveUnknown, planMode, state);
+    }
+
+    public AgentConfig withSystemBlocks(List<SystemBlock> blocks) {
+        return new AgentConfig(model, blocks, thinking,
+            maxIterations, maxConsecutiveUnknown, planMode, reminderState);
     }
 
     public AgentConfig withPlanMode(PlanMode mode) {

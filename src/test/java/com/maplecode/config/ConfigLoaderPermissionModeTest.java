@@ -61,4 +61,51 @@ class ConfigLoaderPermissionModeTest {
             """);
         assertThrows(ConfigException.class, () -> ConfigLoader.load(f));
     }
+
+    @Test
+    void agent_limits_defaults(@TempDir Path tmp) throws Exception {
+        var f = tmp.resolve("c.yaml");
+        Files.writeString(f, """
+            protocol: anthropic
+            model: m
+            base_url: https://x
+            api_key: k
+            """);
+        var limits = ConfigLoader.load(f).agentLimits();
+        assertEquals(50, limits.maxIterations());
+        assertEquals(3, limits.maxConsecutiveUnknown());
+    }
+
+    @Test
+    void agent_limits_custom(@TempDir Path tmp) throws Exception {
+        var f = tmp.resolve("c.yaml");
+        Files.writeString(f, """
+            protocol: anthropic
+            model: m
+            base_url: https://x
+            api_key: k
+            agent:
+              max_iterations: 100
+              max_consecutive_unknown: 5
+            """);
+        var limits = ConfigLoader.load(f).agentLimits();
+        assertEquals(100, limits.maxIterations());
+        assertEquals(5, limits.maxConsecutiveUnknown());
+    }
+
+    @Test
+    void agent_limits_partial(@TempDir Path tmp) throws Exception {
+        var f = tmp.resolve("c.yaml");
+        Files.writeString(f, """
+            protocol: anthropic
+            model: m
+            base_url: https://x
+            api_key: k
+            agent:
+              max_iterations: 80
+            """);
+        var limits = ConfigLoader.load(f).agentLimits();
+        assertEquals(80, limits.maxIterations());
+        assertEquals(3, limits.maxConsecutiveUnknown());  // 未指定用默认
+    }
 }

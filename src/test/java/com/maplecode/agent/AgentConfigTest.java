@@ -18,7 +18,7 @@ class AgentConfigTest {
         assertEquals("test-model", c.model());
         assertTrue(c.systemBlocks().isEmpty());
         assertNull(c.thinking());
-        assertEquals(25, c.maxIterations());
+        assertEquals(50, c.maxIterations());
         assertEquals(3, c.maxConsecutiveUnknown());
         assertEquals(PlanMode.NORMAL, c.planMode());
         assertEquals(PlanModeReminder.State.initial(), c.reminderState());
@@ -48,13 +48,13 @@ class AgentConfigTest {
         var thinking = new ThinkingConfig(ThinkingConfig.Type.ADAPTIVE, null, ThinkingConfig.Effort.MEDIUM);
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
             "sk-test", "You are helpful", List.of(), thinking, new AppConfig.Timeouts(10, 60),
-            com.maplecode.permission.PermissionMode.DEFAULT);
+            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults());
         var agent = AgentConfig.fromAppConfig(app);
 
         assertEquals("claude-sonnet-4-6", agent.model());
         assertTrue(agent.systemBlocks().isEmpty());
         assertSame(thinking, agent.thinking());
-        assertEquals(25, agent.maxIterations());
+        assertEquals(50, agent.maxIterations());
         assertEquals(3, agent.maxConsecutiveUnknown());
         assertEquals(PlanMode.NORMAL, agent.planMode());
     }
@@ -63,7 +63,7 @@ class AgentConfigTest {
     void fromAppConfigHandlesNullOptionals() {
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
             "sk-test", null, List.of(), null, new AppConfig.Timeouts(10, 60),
-            com.maplecode.permission.PermissionMode.DEFAULT);
+            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults());
         var agent = AgentConfig.fromAppConfig(app);
 
         assertTrue(agent.systemBlocks().isEmpty());

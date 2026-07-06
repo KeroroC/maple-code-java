@@ -59,8 +59,15 @@ public final class ConfigLoader {
                 "permission_mode must be strict|default|permissive, got: " + modeStr);
         };
 
+        Map<?, ?> agentMap = optionalMap(root, "agent");
+        int maxIter = agentMap != null && agentMap.get("max_iterations") instanceof Number n3
+            ? n3.intValue() : AppConfig.AgentLimits.DEFAULT_MAX_ITERATIONS;
+        int maxUnknown = agentMap != null && agentMap.get("max_consecutive_unknown") instanceof Number n4
+            ? n4.intValue() : AppConfig.AgentLimits.DEFAULT_MAX_CONSECUTIVE_UNKNOWN;
+
         return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
-            List.of(), thinking, new AppConfig.Timeouts(connect, read), mode);
+            List.of(), thinking, new AppConfig.Timeouts(connect, read), mode,
+            new AppConfig.AgentLimits(maxIter, maxUnknown));
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {

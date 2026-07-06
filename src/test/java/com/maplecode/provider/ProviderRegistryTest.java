@@ -16,7 +16,8 @@ class ProviderRegistryTest {
 
     private AppConfig cfg(String protocol) {
         return new AppConfig(protocol, "m", "https://x", "k", null, List.of(), null,
-            new AppConfig.Timeouts(10, 60), com.maplecode.permission.PermissionMode.DEFAULT);
+            new AppConfig.Timeouts(10, 60), com.maplecode.permission.PermissionMode.DEFAULT,
+            AppConfig.AgentLimits.defaults());
     }
 
     @Test

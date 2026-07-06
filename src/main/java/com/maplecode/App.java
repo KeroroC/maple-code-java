@@ -88,9 +88,8 @@ public final class App {
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
         var blocks = new PromptAssembler().assemble(sections, sectionCtx);
 
-        AgentConfig agentConfig = new AgentConfig(
-            raw.model(), blocks, raw.thinking(),
-            25, 3, PlanMode.NORMAL, PlanModeReminder.State.initial());
+        AgentConfig agentConfig = AgentConfig.fromAppConfig(raw)
+            .withSystemBlocks(blocks);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
             reader, registry, executor, engine, agentConfig);
