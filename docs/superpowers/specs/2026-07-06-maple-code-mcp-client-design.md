@@ -158,6 +158,7 @@ com.maplecode.mcp
 | 单次调用 | 连接已掉 | `tool.execute` → `McpConnectionException` | `ToolExecutor` 兜底 → `ToolResult.error("mcp[<server>] connection lost: ...")` |
 | 单次调用 | 超时 | `JsonRpc` per-call timer | `McpTimeoutException` → `ToolResult.error("mcp[<server>:<tool>] call timed out after Ns")` |
 | 单次调用 | server JSON-RPC error | `JsonRpc.handle` 解析 error 字段 | 抛 `McpProtocolException(code, msg)` → `ToolResult.error("mcp[<server>:<tool>] server error: <msg> (code N)")` |
+| 单次调用 | 运行期 HTTP 4xx/5xx（session 过期 / server 暂时不可用） | StreamableHttp 解析响应 | `IOException` → 抛 `McpConnectionException` → `ToolResult.error("mcp[<server>] HTTP NNN: <reason>")` |
 
 错误消息永远只点 server 名 + tool 名，不回贴原始参数原文（避免日志泄漏）。
 
@@ -265,13 +266,13 @@ List<Tool> builtins = List.of(
 List<Tool> mcpTools = clients.values().stream()
     .flatMap(c -> c.cachedTools().stream().map(t -> McpToolAdapter.of(c, t)))
     .toList();
-ToolRegistry registry = new ToolRegistry(concat(builtins, mcpTools));  // 构造期 name dup 校验
+List<Tool> allTools = Stream.concat(builtins.stream(), mcpTools.stream()).toList();
+ToolRegistry registry = new ToolRegistry(allTools);  // 构造期 name dup 校验仍触发
 
 // 4. JVM 退出关所有 stdio 进程 / http 资源
-Runtime.getRuntime().addShutdownHook(new Thread(clients.values()::forEach,
-    "mcp-shutdown") {
-    public void run() { for (var c : clients.values()) c.close(); }
-});
+Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+    for (var c : clients.values()) c.close();
+}, "mcp-shutdown"));
 ```
 
 LlmProvider / PermissionEngine / ToolExecutor / AgentLoop 不改。
