@@ -1,6 +1,6 @@
 # MapleCode
 
-一个极简的 Java 命令行 AI 对话工具。通过 SSE 流式转发 Anthropic Claude 或 OpenAI Chat Completions 的响应，支持多轮对话记忆和工具调用。
+一个极简的 Java 命令行 AI 对话工具。通过 SSE 流式转发 Anthropic Claude 或 OpenAI Chat Completions 的响应，支持多轮对话记忆、工具调用和 Agent Loop（模型自主循环调工具）。
 
 ## 构建
 
@@ -51,6 +51,10 @@ REPL 内：
 - `"""` 开启多行输入；单独一行 `"""` 结束
 - `/clear` —— 清空消息历史
 - `/tools` —— 列出可用工具
+- `/plan <query>` —— 规划模式（只读工具，模型只分析不执行）
+- `/do` —— 执行上一条规划
+- `/cancel` —— 取消当前执行
+- `/mode [strict|default|permissive]` —— 查看或切换权限模式
 - `/exit` 或 Ctrl+D —— 退出
 
 ## 工具系统
@@ -68,12 +72,48 @@ REPL 内：
 
 **工具调用流程：**
 1. 模型识别需要使用工具时，会发送 tool_use 请求
-2. 程序自动执行工具并返回结果
-3. 模型根据工具结果继续对话
+2. 权限系统检查（黑名单 → 路径沙箱 → 规则 → 模式 → 人回路）
+3. 通过后自动执行工具并返回结果
+4. 模型根据工具结果继续对话
 
 **错误处理：**
 - 工具执行失败时，错误信息会返回给模型，让模型可以调整策略
+- 权限拒绝时，`权限拒绝: <原因>` 返回给模型，Agent Loop 不中断
 - 所有工具错误都不会中断 REPL，用户可以继续对话
+
+## 权限系统
+
+五层防御，所有工具调用都经过权限检查：
+
+| 层 | 说明 |
+|---|---|
+| 黑名单 | 12 条硬编码正则拦截高危命令（rm -rf /、sudo、fork bomb 等），不可配置 |
+| 路径沙箱 | 文件操作必须在项目目录内，解析符号链接防逃逸 |
+| 规则引擎 | 三层 YAML 规则（用户全局 / 项目 / 项目本地），first-match-wins |
+| 权限模式 | strict（未匹配直接拒绝）/ default（未匹配走人回路）/ permissive（未匹配直接放行） |
+| 人在回路 | default 模式下弹 4 选 1：本次允许 / 本会话允许 / 本项目允许 / 拒绝 |
+
+**规则文件**（优先级从低到高）：
+
+| 文件 | 说明 |
+|---|---|
+| `~/.maplecode/permissions.yaml` | 用户全局规则 |
+| `<项目>/.maplecode/permissions.yaml` | 项目级规则（应入 git） |
+| `<项目>/.maplecode/permissions.local.yaml` | 项目本地规则（应入 .gitignore） |
+
+**规则格式**：
+
+```yaml
+rules:
+  - tool: exec
+    pattern: "git *"
+    action: allow
+  - tool: read_file
+    pattern: "**/.env"
+    action: deny
+```
+
+exec 工具的 pattern 用 shell glob（`*` = 任意非空格序列），其他工具用标准 glob（`**/*.java`）。
 
 ## 测试
 
@@ -89,12 +129,15 @@ mvn test
 
 - **Provider 层**：Anthropic 和 OpenAI 双协议支持，统一的 `LlmProvider` 接口
 - **工具系统**：`Tool` 接口 + `ToolRegistry` + `ToolExecutor`，支持 6 个内置工具
+- **Agent Loop**：`AgentLoop` ReAct 循环，安全分批并发（只读并行 + 有副作用串行），Plan Mode 双层防御
+- **权限系统**：五层 `PermissionCheck` 管道 + `PermissionEngine` + 三档模式 + HITL
 - **流式解析**：`StreamChunk` sealed 接口，支持文本、思考、工具调用三种 chunk 类型
 - **会话管理**：`ChatSession` 管理对话历史，支持多轮上下文
-- **REPL**：JLine 3 驱动的交互式命令行，支持多行输入和工具调用
+- **REPL**：JLine 3 驱动的交互式命令行，支持多行输入和斜杠命令
 
 ### 设计文档
 
-- `docs/superpowers/specs/2026-07-01-maple-code-design.md` —— v1 设计规格
-- `docs/superpowers/specs/2026-07-03-maple-code-tool-system-design.md` —— 工具系统设计规格
-- `docs/superpowers/plans/2026-07-03-maple-code-tool-system.md` —— 工具系统实现计划
+- `docs/superpowers/specs/2026-07-01-maple-code-design.md` —— v1 流式 REPL 设计规格
+- `docs/superpowers/specs/2026-07-03-maple-code-tool-system-design.md` —— v2 工具系统设计规格
+- `docs/superpowers/specs/2026-07-04-maple-code-agent-loop-design.md` —— v3 Agent Loop 设计规格
+- `docs/superpowers/specs/2026-07-06-maple-code-permission-system-design.md` —— v4 权限系统设计规格
