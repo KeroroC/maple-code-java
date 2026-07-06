@@ -2,10 +2,12 @@ package com.maplecode.permission;
 
 import org.jline.reader.LineReader;
 import org.jline.reader.UserInterruptException;
+import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.utils.InfoCmp;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
 
 public final class JLineInputSource implements InputSource {
@@ -29,18 +31,27 @@ public final class JLineInputSource implements InputSource {
     @Override
     public int readChoice(String prompt, List<String> options) {
         int selected = 0;
+
+        // 保存原始属性，切换到 raw mode
+        Attributes original = terminal.getAttributes();
+        Attributes raw = new Attributes(original);
+        raw.setLocalFlags(EnumSet.of(Attributes.LocalFlag.ICANON), false);
+        raw.setLocalFlags(EnumSet.of(Attributes.LocalFlag.ECHO), false);
+        raw.setInputFlags(EnumSet.of(Attributes.InputFlag.ICRNL), false);
+        terminal.setAttributes(raw);
         terminal.puts(InfoCmp.Capability.cursor_invisible);
+
         try {
             render(prompt, options, selected);
             while (true) {
-                int c = readKey();
+                int c = readByte();
                 if (c == -1) throw new RuntimeException("EOF");
 
-                // 上箭头: ESC [ A (27 91 65)
+                // ESC 序列（箭头键）
                 if (c == 27) {
-                    int next = readKey();
+                    int next = readByte();
                     if (next == '[') {
-                        int arrow = readKey();
+                        int arrow = readByte();
                         if (arrow == 65) {  // 上
                             selected = (selected - 1 + options.size()) % options.size();
                         } else if (arrow == 66) {  // 下
@@ -52,8 +63,8 @@ public final class JLineInputSource implements InputSource {
                     continue;
                 }
 
-                // 回车
-                if (c == '\r' || c == '\n') {
+                // 回车 (CR=13 或 LF=10)
+                if (c == 13 || c == 10) {
                     clearRendered(options.size());
                     System.out.println(prompt);
                     System.out.println("  ✓ " + options.get(selected));
@@ -73,12 +84,13 @@ public final class JLineInputSource implements InputSource {
             }
         } finally {
             terminal.puts(InfoCmp.Capability.cursor_visible);
+            terminal.setAttributes(original);  // 恢复原始属性
         }
     }
 
-    private int readKey() {
+    private int readByte() {
         try {
-            return terminal.reader().read();
+            return terminal.input().read();
         } catch (IOException e) {
             return -1;
         }
