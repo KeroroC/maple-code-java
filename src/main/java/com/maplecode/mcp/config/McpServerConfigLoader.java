@@ -58,7 +58,6 @@ public final class McpServerConfigLoader {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void mergeLayer(Map<String, Map<String, Object>> layer,
                                    Map<String, Map<String, Object>> into) {
         for (var e : layer.entrySet()) {
@@ -71,21 +70,20 @@ public final class McpServerConfigLoader {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static McpServerSpec parseEntry(String name, Map<String, Object> v) {
         String type = stringOrThrow(name, v, "type");
         switch (type) {
             case "stdio" -> {
                 String command = stringOrThrow(name, v, "command");
-                List<String> args = listOrEmpty(v.get("args"));
-                Map<String, String> env = stringMapOrEmpty(v.get("env"));
+                List<String> args = listOrEmpty(v.get("args"), name, "args");
+                Map<String, String> env = stringMapOrEmpty(v.get("env"), name, "env");
                 Map<String, String> expanded = new HashMap<>();
                 env.forEach((k, val) -> expanded.put(k, ConfigLoader.expandEnv(val)));
                 return new McpServerSpec.Stdio(name, command, args, expanded);
             }
             case "http" -> {
                 String url = stringOrThrow(name, v, "url");
-                Map<String, String> headers = stringMapOrEmpty(v.get("headers"));
+                Map<String, String> headers = stringMapOrEmpty(v.get("headers"), name, "headers");
                 Map<String, String> expanded = new HashMap<>();
                 headers.forEach((k, val) -> expanded.put(k, ConfigLoader.expandEnv(val)));
                 return new McpServerSpec.Http(name, url, expanded);
@@ -102,25 +100,23 @@ public final class McpServerConfigLoader {
         return val.toString();
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<String> listOrEmpty(Object o) {
+    private static List<String> listOrEmpty(Object o, String serverName, String key) {
         if (o == null) return List.of();
         if (o instanceof List<?> l) {
             List<String> out = new ArrayList<>();
             for (var x : l) out.add(x.toString());
             return out;
         }
-        throw new ConfigException("expected list");
+        throw new ConfigException("mcp server '" + serverName + "': '" + key + "' must be a list");
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, String> stringMapOrEmpty(Object o) {
+    private static Map<String, String> stringMapOrEmpty(Object o, String serverName, String key) {
         if (o == null) return Map.of();
         if (o instanceof Map<?, ?> m) {
             Map<String, String> out = new HashMap<>();
             for (var e : m.entrySet()) out.put(e.getKey().toString(), e.getValue().toString());
             return out;
         }
-        throw new ConfigException("expected map of strings");
+        throw new ConfigException("mcp server '" + serverName + "': '" + key + "' must be a map of strings");
     }
 }
