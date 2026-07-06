@@ -38,7 +38,7 @@ class PermissionEngineTest {
         var engine = new PermissionEngine(List.of(undecided), PermissionMode.DEFAULT);
         var d = engine.check(req());
         assertEquals(Decision.Verdict.DENY, d.verdict());
-        assertTrue(d.reason().contains("no decision reached"), d.reason());
+        assertTrue(d.reason().contains("未达成决策"), d.reason());
     }
 
     @Test

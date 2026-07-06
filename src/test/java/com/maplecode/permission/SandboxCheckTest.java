@@ -39,7 +39,7 @@ class SandboxCheckTest {
             tmp);
         var d = sandbox.check(r, ctx(tmp));
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("sandbox"), d.get().reason());
+        assertTrue(d.get().reason().contains("沙箱"), d.get().reason());
     }
 
     @Test

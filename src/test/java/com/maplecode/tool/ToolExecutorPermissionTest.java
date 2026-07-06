@@ -45,7 +45,7 @@ class ToolExecutorPermissionTest {
         var exec = new ToolExecutor(new ToolRegistry(List.of(t)), engine);
         var r = exec.run("foo", new ObjectMapper().createObjectNode());
         assertTrue(r.isError());
-        assertTrue(r.content().startsWith("permission denied:"), r.content());
+        assertTrue(r.content().startsWith("权限拒绝:"), r.content());
         assertTrue(r.content().contains("blocked"), r.content());
         assertEquals(0, calls.get(), "tool should not be called");
     }

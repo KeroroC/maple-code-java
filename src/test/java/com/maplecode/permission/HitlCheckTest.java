@@ -65,7 +65,7 @@ class HitlCheckTest {
         hitl.setEngine(engine);
         var d = hitl.check(req("rm"), new PermissionContext(PermissionMode.DEFAULT));
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("user denied"));
+        assertTrue(d.get().reason().contains("用户拒绝"));
     }
 
     @Test
@@ -77,7 +77,7 @@ class HitlCheckTest {
         hitl.setEngine(engine);
         var d = hitl.check(req("rm"), new PermissionContext(PermissionMode.DEFAULT));
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("invalid choice"));
+        assertTrue(d.get().reason().contains("无效选项"));
     }
 
     @Test
@@ -107,7 +107,7 @@ class HitlCheckTest {
             engine.sessionAllowForTest(), engine.sessionDenyForTest());
         var d = hitl.check(req("rm"), ctx);
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("session deny"));
+        assertTrue(d.get().reason().contains("会话级拒绝"));
     }
 
     @Test
@@ -118,7 +118,7 @@ class HitlCheckTest {
         var hitl = new HitlCheck(in, out);
         hitl.setEngine(engine);
         hitl.check(req("rm -rf /tmp/foo"), new PermissionContext(PermissionMode.DEFAULT));
-        assertTrue(out.lines.stream().anyMatch(l -> l.contains("permission required")));
+        assertTrue(out.lines.stream().anyMatch(l -> l.contains("需要权限确认")));
         assertTrue(out.lines.stream().anyMatch(l -> l.contains("exec")));
         assertTrue(out.lines.stream().anyMatch(l -> l.contains("rm -rf /tmp/foo")));
         assertTrue(out.lines.stream().anyMatch(l -> l.contains("DEFAULT")));

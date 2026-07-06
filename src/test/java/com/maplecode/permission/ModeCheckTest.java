@@ -18,14 +18,14 @@ class ModeCheckTest {
     void strict_denies_when_no_rule_matched() {
         var d = new ModeCheck().check(req(), new PermissionContext(PermissionMode.STRICT));
         assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("strict"));
+        assertTrue(d.get().reason().contains("严格"));
     }
 
     @Test
     void permissive_allows_when_no_rule_matched() {
         var d = new ModeCheck().check(req(), new PermissionContext(PermissionMode.PERMISSIVE));
         assertEquals(Decision.Verdict.ALLOW, d.orElseThrow().verdict());
-        assertTrue(d.get().reason().contains("permissive"));
+        assertTrue(d.get().reason().contains("放行"));
     }
 
     @Test

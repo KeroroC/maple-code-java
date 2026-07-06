@@ -28,7 +28,7 @@ public final class SandboxCheck implements PermissionCheck {
         try {
             this.sandboxRoot = cwd.toRealPath();
         } catch (IOException e) {
-            throw new IllegalStateException("cannot resolve sandbox root: " + cwd, e);
+            throw new IllegalStateException("无法解析沙箱根目录: " + cwd, e);
         }
     }
 
@@ -51,7 +51,7 @@ public final class SandboxCheck implements PermissionCheck {
             Path normalized = requested.normalize();
             if (!normalized.startsWith(sandboxRoot)) {
                 return Optional.of(Decision.deny(
-                    "path escapes sandbox: " + normalized + " is outside " + sandboxRoot));
+                    "路径越界: " + normalized + " 在沙箱 " + sandboxRoot + " 之外"));
             }
             return Optional.empty();
         }
@@ -63,11 +63,11 @@ public final class SandboxCheck implements PermissionCheck {
         } catch (NoSuchFileException e) {
             return Optional.empty();  // path doesn't exist -- not sandbox's concern
         } catch (IOException e) {
-            return Optional.of(Decision.deny("cannot resolve path: " + e.getMessage()));
+            return Optional.of(Decision.deny("无法解析路径: " + e.getMessage()));
         }
         if (!real.startsWith(sandboxRoot)) {
             return Optional.of(Decision.deny(
-                "path escapes sandbox: " + real + " is outside " + sandboxRoot));
+                "路径越界: " + real + " 在沙箱 " + sandboxRoot + " 之外"));
         }
         return Optional.empty();
     }

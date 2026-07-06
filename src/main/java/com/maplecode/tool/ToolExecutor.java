@@ -39,7 +39,7 @@ public final class ToolExecutor {
             Path cwd = Path.of(System.getProperty("user.dir"));
             Decision decision = engine.check(new PermissionRequest(name, args, cwd));
             if (decision.verdict() == Decision.Verdict.DENY) {
-                return ToolResult.error("permission denied: " + decision.reason());
+                return ToolResult.error("权限拒绝: " + decision.reason());
             }
         }
 

@@ -26,36 +26,36 @@ public final class HitlCheck implements PermissionCheck {
         if (pattern != null) {
             ToolCall tc = new ToolCall(req.toolName(), pattern);
             if (ctx.sessionAllows().contains(tc))
-                return Optional.of(Decision.allow("session allow"));
+                return Optional.of(Decision.allow("会话级允许"));
             if (ctx.sessionDenies().contains(tc))
-                return Optional.of(Decision.deny("session deny"));
+                return Optional.of(Decision.deny("会话级拒绝"));
         }
 
         output.println("");
-        output.println("─── permission required ─────────────────────────────────────");
-        output.println("  tool:    " + req.toolName());
-        output.println("  args:    " + summarizeArgs(req));
-        output.println("  mode:    " + ctx.mode());
+        output.println("─── 需要权限确认 ─────────────────────────────────────────────");
+        output.println("  工具:    " + req.toolName());
+        output.println("  参数:    " + summarizeArgs(req));
+        output.println("  模式:    " + ctx.mode());
         output.println("");
-        output.println("  [1] allow this time");
-        output.println("  [2] allow for this session");
-        output.println("  [3] allow for this project (writes permissions.local.yaml)");
-        output.println("  [4] deny");
+        output.println("  [1] 本次允许");
+        output.println("  [2] 本会话允许");
+        output.println("  [3] 本项目允许（写入 permissions.local.yaml）");
+        output.println("  [4] 拒绝");
         output.println("");
         String choice;
         try {
-            choice = input.readLine("  choice [1-4]: ").trim();
+            choice = input.readLine("  请选择 [1-4]: ").trim();
         } catch (RuntimeException e) {
-            return Optional.of(Decision.deny("user interrupted at permission prompt"));
+            return Optional.of(Decision.deny("用户在权限确认时中断"));
         }
 
         return switch (choice) {
-            case "1" -> Optional.of(Decision.allow("user allowed once"));
+            case "1" -> Optional.of(Decision.allow("用户本次允许"));
             case "2" -> {
                 if (pattern != null && engine != null) {
                     engine.permitForSession(new ToolCall(req.toolName(), pattern));
                 }
-                yield Optional.of(Decision.allow("user allowed for session"));
+                yield Optional.of(Decision.allow("用户本会话允许"));
             }
             case "3" -> {
                 if (pattern != null && engine != null) {
@@ -63,15 +63,15 @@ public final class HitlCheck implements PermissionCheck {
                         Path cwd = Paths.get(System.getProperty("user.dir"));
                         engine.persistProjectAllow(cwd, req.toolName(), pattern);
                     } catch (IOException e) {
-                        output.println("  warning: failed to persist project allow: "
-                            + e.getMessage() + "; treating as session allow");
+                        output.println("  警告: 写入项目规则失败: "
+                            + e.getMessage() + "，降级为本会话允许");
                         engine.permitForSession(new ToolCall(req.toolName(), pattern));
                     }
                 }
-                yield Optional.of(Decision.allow("user allowed for project"));
+                yield Optional.of(Decision.allow("用户本项目允许"));
             }
-            case "4" -> Optional.of(Decision.deny("user denied"));
-            default  -> Optional.of(Decision.deny("invalid choice '" + choice + "', denying"));
+            case "4" -> Optional.of(Decision.deny("用户拒绝"));
+            default  -> Optional.of(Decision.deny("无效选项 '" + choice + "'，默认拒绝"));
         };
     }
 

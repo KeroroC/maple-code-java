@@ -28,7 +28,7 @@ public final class PermissionEngine {
             Optional<Decision> d = c.check(req, ctx);
             if (d.isPresent()) return d.get();
         }
-        return Decision.deny("no decision reached");
+        return Decision.deny("未达成决策");
     }
 
     public PermissionMode mode() { return mode.get(); }

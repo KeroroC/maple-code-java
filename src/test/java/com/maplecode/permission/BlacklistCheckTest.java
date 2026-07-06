@@ -24,7 +24,7 @@ class BlacklistCheckTest {
         var d = new BlacklistCheck().check(execReq("rm -rf /"), ctx());
         assertTrue(d.isPresent());
         assertEquals(Decision.Verdict.DENY, d.get().verdict());
-        assertTrue(d.get().reason().contains("blacklist"), d.get().reason());
+        assertTrue(d.get().reason().contains("内置黑名单"), d.get().reason());
     }
 
     @Test
