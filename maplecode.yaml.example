@@ -14,6 +14,18 @@ extended_thinking:             # 可选；OpenAI 忽略此块
   effort: high                 # adaptive 时：low | medium | high
   # budget_tokens: 10000       # 仅 enabled 时：>= 1024 且 < max_tokens
 
+permission_mode: default       # "strict"（未匹配直接拒绝） | "default"（未匹配走人回路） | "permissive"（未匹配直接放行）
+                               # 运行时可通过 /mode 命令热切；重启后回到此处配置
+                               # 规则文件（优先级从低到高）：
+                               #   ~/.maplecode/permissions.yaml        用户全局
+                               #   <项目>/.maplecode/permissions.yaml   项目级（应入 git）
+                               #   <项目>/.maplecode/permissions.local.yaml  项目本地（应入 .gitignore）
+                               # 格式示例：
+                               #   rules:
+                               #     - tool: exec
+                               #       pattern: "git *"
+                               #       action: allow
+
 timeouts:
   connect_seconds: 10
   read_seconds: 60
