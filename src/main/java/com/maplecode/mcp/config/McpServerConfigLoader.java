@@ -74,9 +74,9 @@ public final class McpServerConfigLoader {
         "type", "command", "args", "env", "url", "headers", "enabled");
 
     private static McpServerSpec parseEntry(String name, Map<String, Object> v) {
-        warnUnknownKeys(name, v);
         boolean enabled = ConfigLoader.isEnabled(v.get("enabled"));
         String type = stringOrThrow(name, v, "type");
+        warnUnknownKeys(name, v);
         switch (type) {
             case "stdio" -> {
                 String command = stringOrThrow(name, v, "command");
