@@ -48,7 +48,7 @@ class AgentConfigTest {
         var thinking = new ThinkingConfig(ThinkingConfig.Type.ADAPTIVE, null, ThinkingConfig.Effort.MEDIUM);
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
             "sk-test", "You are helpful", List.of(), thinking, new AppConfig.Timeouts(10, 60),
-            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults());
+            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults(), null);
         var agent = AgentConfig.fromAppConfig(app);
 
         assertEquals("claude-sonnet-4-6", agent.model());
@@ -63,7 +63,7 @@ class AgentConfigTest {
     void fromAppConfigHandlesNullOptionals() {
         var app = new AppConfig("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com",
             "sk-test", null, List.of(), null, new AppConfig.Timeouts(10, 60),
-            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults());
+            com.maplecode.permission.PermissionMode.DEFAULT, AppConfig.AgentLimits.defaults(), null);
         var agent = AgentConfig.fromAppConfig(app);
 
         assertTrue(agent.systemBlocks().isEmpty());

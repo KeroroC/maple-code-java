@@ -70,7 +70,12 @@ public final class McpServerConfigLoader {
         }
     }
 
+    private static final java.util.Set<String> KNOWN_KEYS = java.util.Set.of(
+        "type", "command", "args", "env", "url", "headers", "enabled");
+
     private static McpServerSpec parseEntry(String name, Map<String, Object> v) {
+        warnUnknownKeys(name, v);
+        boolean enabled = !"false".equals(String.valueOf(v.getOrDefault("enabled", "true")));
         String type = stringOrThrow(name, v, "type");
         switch (type) {
             case "stdio" -> {
@@ -79,17 +84,25 @@ public final class McpServerConfigLoader {
                 Map<String, String> env = stringMapOrEmpty(v.get("env"), name, "env");
                 Map<String, String> expanded = new HashMap<>();
                 env.forEach((k, val) -> expanded.put(k, ConfigLoader.expandEnv(val)));
-                return new McpServerSpec.Stdio(name, command, args, expanded);
+                return new McpServerSpec.Stdio(name, command, args, expanded, enabled);
             }
             case "http" -> {
                 String url = stringOrThrow(name, v, "url");
                 Map<String, String> headers = stringMapOrEmpty(v.get("headers"), name, "headers");
                 Map<String, String> expanded = new HashMap<>();
                 headers.forEach((k, val) -> expanded.put(k, ConfigLoader.expandEnv(val)));
-                return new McpServerSpec.Http(name, url, expanded);
+                return new McpServerSpec.Http(name, url, expanded, enabled);
             }
             default -> throw new ConfigException(
                 "mcp server '" + name + "': type must be stdio|http, got " + type);
+        }
+    }
+
+    private static void warnUnknownKeys(String name, Map<String, Object> v) {
+        for (String key : v.keySet()) {
+            if (!KNOWN_KEYS.contains(key)) {
+                System.err.println("[mcp:" + name + "] WARN: unknown config key '" + key + "', ignored");
+            }
         }
     }
 

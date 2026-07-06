@@ -96,4 +96,33 @@ class McpServerConfigLoaderTest {
             tmp, tmp.resolve("nonexistent_user.yaml"));
         assertTrue(specs.isEmpty());
     }
+
+    @Test
+    void enabledFalseParsedCorrectly(@TempDir Path tmp) throws Exception {
+        Path userFile = tmp.resolve("mcp_servers.yaml");
+        Files.writeString(userFile, """
+            servers:
+              gh:
+                type: http
+                url: https://mcp.example.com/mcp
+                enabled: false
+            """);
+        var specs = new McpServerConfigLoader().loadAll(tmp, userFile);
+        assertEquals(1, specs.size());
+        assertFalse(specs.get(0).enabled());
+    }
+
+    @Test
+    void enabledTrueByDefault(@TempDir Path tmp) throws Exception {
+        Path userFile = tmp.resolve("mcp_servers.yaml");
+        Files.writeString(userFile, """
+            servers:
+              gh:
+                type: http
+                url: https://mcp.example.com/mcp
+            """);
+        var specs = new McpServerConfigLoader().loadAll(tmp, userFile);
+        assertEquals(1, specs.size());
+        assertTrue(specs.get(0).enabled());
+    }
 }

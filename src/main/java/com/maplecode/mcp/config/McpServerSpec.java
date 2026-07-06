@@ -12,12 +12,14 @@ public sealed interface McpServerSpec
     Pattern NAME_PATTERN = Pattern.compile("[a-zA-Z0-9_-]+");
 
     String name();
+    boolean enabled();
 
     record Stdio(
         String name,
         String command,
         List<String> args,
-        Map<String, String> env
+        Map<String, String> env,
+        boolean enabled
     ) implements McpServerSpec {
 
         public Stdio {
@@ -28,19 +30,30 @@ public sealed interface McpServerSpec
             env = env == null ? Map.of() : Map.copyOf(env);
         }
 
+        /** 便捷构造器，enabled 默认 true。 */
+        public Stdio(String name, String command, List<String> args, Map<String, String> env) {
+            this(name, command, args, env, true);
+        }
+
         public String type() { return "stdio"; }
     }
 
     record Http(
         String name,
         String url,
-        Map<String, String> headers
+        Map<String, String> headers,
+        boolean enabled
     ) implements McpServerSpec {
         public Http {
             validateName(name);
             if (url == null || !(url.startsWith("http://") || url.startsWith("https://")))
                 throw new ConfigException("mcp server '" + name + "': url must be http(s)");
             headers = headers == null ? Map.of() : Map.copyOf(headers);
+        }
+
+        /** 便捷构造器，enabled 默认 true。 */
+        public Http(String name, String url, Map<String, String> headers) {
+            this(name, url, headers, true);
         }
 
         public String type() { return "http"; }

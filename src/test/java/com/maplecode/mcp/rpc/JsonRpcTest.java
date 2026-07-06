@@ -94,4 +94,26 @@ class JsonRpcTest {
             assertEquals(i, r.get("i").asInt());
         }
     }
+
+    @Test
+    void notifyDoesNotAllocateId() throws Exception {
+        rpc.notify("notifications/initialized", m.createObjectNode());
+        JsonNode sentJson = sent.get();
+        assertNotNull(sentJson);
+        assertEquals("notifications/initialized", sentJson.get("method").asText());
+        assertFalse(sentJson.has("id"), "notification must not have id field");
+        assertTrue(sentJson.has("jsonrpc"));
+    }
+
+    @Test
+    void notifyDoesNotRegisterPending() throws Exception {
+        rpc.notify("test/method", null);
+        // 发一个 send 请求，id 应该是 1（notify 不消耗 id）
+        var fut = rpc.send("tools/list", null);
+        JsonNode sentJson = sent.get();
+        assertEquals(1, sentJson.get("id").asLong(),
+            "notify should not consume id counter");
+        rpc.handle(m.readTree("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}"));
+        assertNotNull(fut.get(1, TimeUnit.SECONDS));
+    }
 }

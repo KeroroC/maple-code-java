@@ -18,20 +18,32 @@ import java.util.function.Function;
 
 /**
  * 并发启动多个 MCP server，每台独立超时降级——单台失败不影响其他。
+ *
+ * @param perCallTimeout 单次 JsonRpc 调用超时（initialize / tools/list）
+ * @param globalStartDeadline 全部 server 启动的 wall-clock 上限
  */
 public final class McpClientBootstrap {
 
     private final Function<McpServerSpec, McpTransport> transportFactory;
-    private final Duration perServerTimeout;
+    private final Duration perCallTimeout;
+    private final Duration globalStartDeadline;
 
-    public McpClientBootstrap(Duration perServerTimeout) {
-        this(McpClientBootstrap::defaultTransport, perServerTimeout);
+    public McpClientBootstrap(Duration perCallTimeout) {
+        this(McpClientBootstrap::defaultTransport, perCallTimeout,
+             perCallTimeout.multipliedBy(2));
     }
 
     public McpClientBootstrap(Function<McpServerSpec, McpTransport> factory,
-                              Duration perServerTimeout) {
+                              Duration perCallTimeout) {
+        this(factory, perCallTimeout, perCallTimeout.multipliedBy(2));
+    }
+
+    public McpClientBootstrap(Function<McpServerSpec, McpTransport> factory,
+                              Duration perCallTimeout,
+                              Duration globalStartDeadline) {
         this.transportFactory = factory;
-        this.perServerTimeout = perServerTimeout;
+        this.perCallTimeout = perCallTimeout;
+        this.globalStartDeadline = globalStartDeadline;
     }
 
     public Map<String, McpClient> start(List<McpServerSpec> specs) {
@@ -44,7 +56,7 @@ public final class McpClientBootstrap {
 
         var all = CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]));
         try {
-            all.get(perServerTimeout.toMillis() + 200, TimeUnit.MILLISECONDS);
+            all.get(globalStartDeadline.toMillis(), TimeUnit.MILLISECONDS);
         } catch (Exception ignore) {
             // 超时或中断——后续逐个 getNow 收集已完成的
         }
@@ -72,7 +84,7 @@ public final class McpClientBootstrap {
         } catch (Exception e) {
             return null;
         }
-        McpClient client = new McpClient(t, "[" + spec.name() + "]", perServerTimeout);
+        McpClient client = new McpClient(t, "[" + spec.name() + "]", perCallTimeout);
         try {
             client.initialize();
             client.cachedTools();
@@ -84,24 +96,23 @@ public final class McpClientBootstrap {
     }
 
     private static McpTransport defaultTransport(McpServerSpec spec) {
-        if (spec instanceof McpServerSpec.Stdio s) {
-            try {
-                return new Stdio(
-                    join(s.command(), s.args()),
-                    s.name(),
-                    java.nio.file.Path.of("/tmp/mcp-" + s.name() + ".log"));
-            } catch (IOException e) {
-                throw new RuntimeException("stdio spawn failed for '" + s.name() + "'", e);
+        return switch (spec) {
+            case McpServerSpec.Stdio s -> {
+                try {
+                    yield new Stdio(
+                        join(s.command(), s.args()),
+                        s.name(),
+                        java.nio.file.Path.of("/tmp/mcp-" + s.name() + ".log"));
+                } catch (IOException e) {
+                    throw new RuntimeException("stdio spawn failed for '" + s.name() + "'", e);
+                }
             }
-        } else if (spec instanceof McpServerSpec.Http h) {
-            return new StreamableHttp(
+            case McpServerSpec.Http h -> new StreamableHttp(
                 HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
                     .build(),
                 h.url(), h.headers());
-        } else {
-            throw new IllegalStateException("unknown spec type: " + spec.getClass());
-        }
+        };
     }
 
     private static List<String> join(String cmd, List<String> args) {

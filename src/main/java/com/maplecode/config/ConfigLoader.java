@@ -65,9 +65,11 @@ public final class ConfigLoader {
         int maxUnknown = agentMap != null && agentMap.get("max_consecutive_unknown") instanceof Number n4
             ? n4.intValue() : AppConfig.AgentLimits.DEFAULT_MAX_CONSECUTIVE_UNKNOWN;
 
+        AppConfig.McpConfig mcp = parseMcpConfig(optionalMap(root, "mcp_servers"));
+
         return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
             List.of(), thinking, new AppConfig.Timeouts(connect, read), mode,
-            new AppConfig.AgentLimits(maxIter, maxUnknown));
+            new AppConfig.AgentLimits(maxIter, maxUnknown), mcp);
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {
@@ -103,6 +105,15 @@ public final class ConfigLoader {
 
         // ThinkingConfig compact constructor handles all cross-field validation.
         return new ThinkingConfig(type, budget, effort);
+    }
+
+    private static AppConfig.McpConfig parseMcpConfig(Map<?, ?> m) {
+        if (m == null) return null;  // 未配置 mcp_servers 块
+        Object enabledVal = m.get("enabled");
+        boolean enabled = enabledVal == null || !"false".equals(enabledVal.toString());
+        int timeout = m.get("startup_timeout_ms") instanceof Number n
+            ? n.intValue() : AppConfig.McpConfig.DEFAULT_STARTUP_TIMEOUT_MS;
+        return new AppConfig.McpConfig(enabled, timeout);
     }
 
     public static String expandEnv(String value) {

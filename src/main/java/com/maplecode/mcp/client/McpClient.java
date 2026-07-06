@@ -24,9 +24,6 @@ public final class McpClient {
     private final ObjectMapper m = new ObjectMapper();
     private final JsonRpc jsonRpc;
 
-    private String serverInfo;
-    private boolean capabilitiesHasTools;
-    private String protocolVersion;
     private volatile List<McpToolDesc> cachedTools = List.of();
 
     public McpClient(McpTransport transport, String serverName,
@@ -50,17 +47,15 @@ public final class McpClient {
         var fut = jsonRpc.send("initialize", initParams);
         try {
             JsonNode result = fut.get(5, TimeUnit.SECONDS);
-            this.protocolVersion = textOr(result, "protocolVersion", null);
+            String protocolVersion = textOr(result, "protocolVersion", null);
             if (!SUPPORTED_PROTOCOL_VERSIONS.contains(protocolVersion))
                 throw new McpProtocolException(-32000,
                     "unsupported protocol version: " + protocolVersion);
             JsonNode caps = result.get("capabilities");
-            this.capabilitiesHasTools = caps != null && caps.has("tools");
-            if (!capabilitiesHasTools)
+            boolean hasTools = caps != null && caps.has("tools");
+            if (!hasTools)
                 throw new McpProtocolException(-32000, "server doesn't expose tools capability");
-            JsonNode info = result.get("serverInfo");
-            this.serverInfo = info == null ? "" : info.toString();
-            jsonRpc.send("notifications/initialized", m.createObjectNode());
+            jsonRpc.notify("notifications/initialized", m.createObjectNode());
         } catch (Exception e) {
             throw new McpProtocolException(-32000, "initialize failed: " + e.getMessage(), e);
         }
@@ -89,10 +84,9 @@ public final class McpClient {
     }
 
     public CompletableFuture<McpCallResult> callToolFuture(String name, JsonNode arguments) {
-        JsonNode params;
-        try {
-            params = m.readTree("{\"name\":\"" + escape(name) + "\",\"arguments\":" + arguments.toString() + "}");
-        } catch (Exception e) { throw new IllegalArgumentException(e); }
+        var params = m.createObjectNode();
+        params.put("name", name);
+        params.set("arguments", arguments != null ? arguments : m.createObjectNode());
         var fut = jsonRpc.send("tools/call", params);
         return fut.handle((result, err) -> {
             if (err != null) {
@@ -102,10 +96,6 @@ public final class McpClient {
             }
             return extract(result);
         });
-    }
-
-    private static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private McpCallResult extract(JsonNode result) {
@@ -139,7 +129,9 @@ public final class McpClient {
     public String name() { return serverName; }
 
     public void close() {
-        try { transport.close(null); } catch (Exception ignore) {}
+        try { transport.close(null); } catch (Exception e) {
+            System.err.println("[mcp:" + serverName + "] WARN: transport close failed: " + e.getMessage());
+        }
         jsonRpc.close();
     }
 

@@ -17,7 +17,8 @@ public record AppConfig(
     ThinkingConfig thinking,            // nullable
     Timeouts timeouts,
     PermissionMode permissionMode,
-    AgentLimits agentLimits
+    AgentLimits agentLimits,
+    McpConfig mcpConfig                 // nullable；null 表示未配置 mcp_servers 块
 ) {
     public record Timeouts(int connectSeconds, int readSeconds) {
         public Duration connectDuration() { return Duration.ofSeconds(connectSeconds); }
@@ -35,6 +36,23 @@ public record AppConfig(
 
         public static AgentLimits defaults() {
             return new AgentLimits(DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_CONSECUTIVE_UNKNOWN);
+        }
+    }
+
+    /** MCP 配置块，对应 YAML mcp_servers。 */
+    public record McpConfig(boolean enabled, int startupTimeoutMs) {
+        public static final int DEFAULT_STARTUP_TIMEOUT_MS = 5000;
+
+        public McpConfig {
+            if (startupTimeoutMs < 0) throw new IllegalArgumentException("startup_timeout_ms must be >= 0");
+        }
+
+        public static McpConfig defaults() {
+            return new McpConfig(true, DEFAULT_STARTUP_TIMEOUT_MS);
+        }
+
+        public Duration startupTimeoutDuration() {
+            return Duration.ofMillis(startupTimeoutMs);
         }
     }
 }

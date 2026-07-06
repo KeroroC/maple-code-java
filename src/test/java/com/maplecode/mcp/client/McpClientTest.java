@@ -56,11 +56,11 @@ class McpClientTest {
         });
         client.initialize();
         // cachedTools() blocks on fut.get(); deliver response on background thread
-        // id=3 because id=2 was used by notifications/initialized
+        // id=2（notifications/initialized 现在用 notify，不占 id）
         CompletableFuture.runAsync(() -> {
             try { Thread.sleep(50); } catch (InterruptedException ignore) {}
             t.deliver(parse("""
-                {"jsonrpc":"2.0","id":3,"result":{
+                {"jsonrpc":"2.0","id":2,"result":{
                   "tools":[
                     {"name":"create_issue","description":"d","inputSchema":{"type":"object"}},
                     {"name":"list_repos","description":"d","inputSchema":{"type":"object"}}

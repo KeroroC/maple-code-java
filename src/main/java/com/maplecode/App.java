@@ -63,14 +63,23 @@ public final class App {
         Path cwd = Paths.get(System.getProperty("user.dir"));
 
         // === MCP server 装配 ===
-        Path userMcpFile = Paths.get(System.getProperty("user.home"),
-                                      ".maplecode", "mcp_servers.yaml");
-        List<McpServerSpec> specs = new McpServerConfigLoader().loadAll(cwd, userMcpFile);
         Map<String, McpClient> clients;
-        if (specs.isEmpty()) {
+        AppConfig.McpConfig mcpCfg = raw.mcpConfig();
+        if (mcpCfg == null || !mcpCfg.enabled()) {
+            if (mcpCfg != null && !mcpCfg.enabled()) {
+                System.err.println("[mcp] disabled by config (mcp_servers.enabled=false)");
+            }
             clients = Map.of();
         } else {
-            clients = new McpClientBootstrap(Duration.ofSeconds(5)).start(specs);
+            Path userMcpFile = Paths.get(System.getProperty("user.home"),
+                                          ".maplecode", "mcp_servers.yaml");
+            List<McpServerSpec> specs = new McpServerConfigLoader().loadAll(cwd, userMcpFile);
+            specs = specs.stream().filter(McpServerSpec::enabled).toList();
+            if (specs.isEmpty()) {
+                clients = Map.of();
+            } else {
+                clients = new McpClientBootstrap(mcpCfg.startupTimeoutDuration()).start(specs);
+            }
         }
 
         LlmProvider provider = new ProviderRegistry().create(raw);
@@ -84,7 +93,8 @@ public final class App {
                     return c.cachedTools().stream()
                         .map(t -> McpToolAdapter.of(c, t));
                 } catch (Exception e) {
-                    System.err.println("[mcp:" + c.name() + "] WARN: " + e.getMessage());
+                    System.err.println("[mcp:" + c.name() + "] WARN: failed to load tools: " + e.getMessage());
+                    e.printStackTrace(System.err);
                     return Stream.empty();
                 }
             }).toList();
@@ -114,7 +124,9 @@ public final class App {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (var c : clients.values()) {
-                try { c.close(); } catch (Exception ignore) {}
+                try { c.close(); } catch (Exception e) {
+                    System.err.println("[mcp:" + c.name() + "] WARN: shutdown close failed: " + e.getMessage());
+                }
             }
         }, "mcp-shutdown"));
 

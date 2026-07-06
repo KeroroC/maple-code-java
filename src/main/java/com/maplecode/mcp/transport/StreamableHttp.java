@@ -12,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -23,6 +25,7 @@ public final class StreamableHttp implements McpTransport {
     private final HttpClient http;
     private final String url;
     private final Map<String, String> extraHeaders;
+    private final ExecutorService sendExecutor;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private volatile Consumer<JsonNode> inbound;
     private volatile String sessionId;
@@ -31,6 +34,11 @@ public final class StreamableHttp implements McpTransport {
         this.http = http;
         this.url = url;
         this.extraHeaders = Map.copyOf(extraHeaders);
+        this.sendExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "mcp-http-send");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     @Override
@@ -46,7 +54,7 @@ public final class StreamableHttp implements McpTransport {
             f.completeExceptionally(new IOException("transport closed"));
             return f;
         }
-        return CompletableFuture.runAsync(() -> doSend(frame));
+        return CompletableFuture.runAsync(() -> doSend(frame), sendExecutor);
     }
 
     private void doSend(JsonNode frame) {
@@ -107,6 +115,7 @@ public final class StreamableHttp implements McpTransport {
     @Override
     public void close(Throwable cause) {
         closed.set(true);
+        sendExecutor.shutdownNow();
     }
 
     @Override

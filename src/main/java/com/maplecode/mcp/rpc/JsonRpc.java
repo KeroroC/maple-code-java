@@ -59,6 +59,19 @@ public final class JsonRpc implements AutoCloseable {
         return fut;
     }
 
+    /**
+     * 发送 JSON-RPC notification（无 id，不期待响应，不注册 pending）。
+     * 按 JSON-RPC 规范，notification 不会被服务端回包。
+     */
+    public void notify(String method, JsonNode params) {
+        if (closed) throw new IllegalStateException("JsonRpc closed");
+        JsonNode wire;
+        try {
+            wire = mapper.valueToTree(new JsonRpcNotification(method, params));
+        } catch (Exception e) { throw new RuntimeException(e); }
+        sink.apply(wire);
+    }
+
     public void handle(JsonNode frame) {
         if (frame == null || !frame.isObject()) return;
         JsonNode idNode = frame.get("id");

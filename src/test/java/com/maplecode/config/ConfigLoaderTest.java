@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -131,5 +132,50 @@ class ConfigLoaderTest {
         ConfigException ex = assertThrows(ConfigException.class,
             () -> ConfigLoader.load(tmp.resolve("config.yaml")));
         assertEquals("extended_thinking.type=enabled requires budget_tokens >= 1024", ex.getMessage());
+    }
+
+    @Test
+    void mcp_servers_block_parsed(@TempDir Path tmp) throws IOException {
+        Files.writeString(tmp.resolve("config.yaml"), """
+            protocol: anthropic
+            model: claude-sonnet-4-6
+            base_url: https://api.anthropic.com
+            api_key: sk-test
+            mcp_servers:
+              enabled: true
+              startup_timeout_ms: 8000
+            """);
+        AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+        assertNotNull(cfg.mcpConfig());
+        assertTrue(cfg.mcpConfig().enabled());
+        assertEquals(8000, cfg.mcpConfig().startupTimeoutMs());
+    }
+
+    @Test
+    void mcp_servers_disabled(@TempDir Path tmp) throws IOException {
+        Files.writeString(tmp.resolve("config.yaml"), """
+            protocol: anthropic
+            model: claude-sonnet-4-6
+            base_url: https://api.anthropic.com
+            api_key: sk-test
+            mcp_servers:
+              enabled: false
+            """);
+        AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+        assertNotNull(cfg.mcpConfig());
+        assertFalse(cfg.mcpConfig().enabled());
+        assertEquals(5000, cfg.mcpConfig().startupTimeoutMs()); // default
+    }
+
+    @Test
+    void mcp_servers_absent_returns_null(@TempDir Path tmp) throws IOException {
+        Files.writeString(tmp.resolve("config.yaml"), """
+            protocol: anthropic
+            model: claude-sonnet-4-6
+            base_url: https://api.anthropic.com
+            api_key: sk-test
+            """);
+        AppConfig cfg = ConfigLoader.load(tmp.resolve("config.yaml"));
+        assertNull(cfg.mcpConfig());
     }
 }

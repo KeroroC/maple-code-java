@@ -24,6 +24,7 @@ public final class Stdio implements McpTransport {
     private final Process process;
     private final BufferedWriter stdin;
     private final Thread readerThread;
+    private final Thread stderrThread;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final String prefix;
     private volatile Consumer<JsonNode> inbound;
@@ -37,7 +38,7 @@ public final class Stdio implements McpTransport {
         this.prefix = nameForDiagnostics + ":stderr] ";
         this.stdin = new BufferedWriter(
             new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
-        startStderrForward(process.getErrorStream(), stderrRedirect);
+        this.stderrThread = startStderrForward(process.getErrorStream(), stderrRedirect);
         this.readerThread = startReader(process.getInputStream());
     }
 
@@ -97,7 +98,7 @@ public final class Stdio implements McpTransport {
         }
     }
 
-    private void startStderrForward(InputStream err, Path log) {
+    private Thread startStderrForward(InputStream err, Path log) {
         Thread t = new Thread(() -> {
             try (var br = new BufferedReader(new InputStreamReader(err, StandardCharsets.UTF_8))) {
                 String line;
@@ -116,6 +117,7 @@ public final class Stdio implements McpTransport {
         }, "mcp-stdio-stderr");
         t.setDaemon(true);
         t.start();
+        return t;
     }
 
     @Override
@@ -124,6 +126,7 @@ public final class Stdio implements McpTransport {
         try { stdin.close(); } catch (IOException ignore) {}
         process.destroyForcibly();
         try { readerThread.join(500); } catch (InterruptedException ignore) {}
+        try { stderrThread.join(500); } catch (InterruptedException ignore) {}
     }
 
     @Override
