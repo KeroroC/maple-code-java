@@ -55,3 +55,16 @@ agent:
 mcp_servers:
   enabled: true
   startup_timeout_ms: 5000
+
+# ===== v6 上下文管理 =====
+
+# 上下文窗口总 token 数（输入预算，不含 max_tokens 输出预算）
+# 默认 200000，覆盖 Sonnet 4.6 / Opus 4.7 / Haiku 4.5
+# GPT-4o 用户请调到 128000；调试时也可临时调小（如 30000）触发次层摘要
+# 未配则走默认 200000
+# context_window: 200000
+
+# 摘要专用 model（可选）；未配则用主对话 model
+# 推荐 claude-haiku-4-5：便宜、快，5 段结构化摘要任务足够
+# 配错 model 名会在第一次 /compress 或自动压缩时由 provider 返回 HTTP 4xx
+# summarizer_model: claude-haiku-4-5
