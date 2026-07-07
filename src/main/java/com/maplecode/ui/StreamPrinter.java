@@ -1,6 +1,7 @@
 package com.maplecode.ui;
 
 import com.maplecode.agent.AgentEvent;
+import com.maplecode.compression.CompressionResult;
 import com.maplecode.provider.TokenUsage;
 
 import java.io.PrintStream;
@@ -119,7 +120,33 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
             case AgentEvent.BatchEnd b -> { /* silent */ }
             case AgentEvent.ToolCallEnd e -> { /* silent */ }
             case AgentEvent.AgentStop s -> info("[agent stopped: " + s.reason() + "]");
-            case AgentEvent.CompressionApplied c -> { /* handled in T13 */ }
+            case AgentEvent.CompressionApplied c -> {
+                System.err.println("[compression] applied: " + renderResult(c.result()));
+            }
         }
+    }
+
+    /**
+     * ReplLoop /compress 命令显式调用：打印结果到 stdout。
+     */
+    public void compressionResult(CompressionResult r) {
+        out.println(renderResult(r));
+    }
+
+    private String renderResult(CompressionResult r) {
+        return switch (r) {
+            case CompressionResult.Noop n -> "[compression] noop: below threshold";
+            case CompressionResult.ChangedOffloadOnly o ->
+                "[compression] offloaded " + o.offloadedCount() + " tool result(s)";
+            case CompressionResult.ChangedFull f ->
+                "[compression] full compression: offloaded " + f.offloadedCount()
+                    + ", summary covered ~" + f.summaryInputTokens() + " input tokens";
+            case CompressionResult.FailedOffload f ->
+                "[compression] offload failed: " + f.reason();
+            case CompressionResult.FailedSummary f ->
+                "[compression] summary failed (" + f.consecutiveFailures() + " consecutive): " + f.reason();
+            case CompressionResult.SkippedCircuitOpen s ->
+                "[compression] circuit open (" + s.consecutiveFailures() + " failures); auto-compress disabled this session";
+        };
     }
 }
