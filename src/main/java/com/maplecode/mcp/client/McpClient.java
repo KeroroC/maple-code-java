@@ -23,6 +23,7 @@ public final class McpClient {
     private final String serverName;
     private final ObjectMapper m = new ObjectMapper();
     private final JsonRpc jsonRpc;
+    private final Duration defaultTimeout;
 
     private volatile List<McpToolDesc> cachedTools = List.of();
 
@@ -30,6 +31,7 @@ public final class McpClient {
                      Duration defaultTimeout) {
         this.transport = transport;
         this.serverName = serverName;
+        this.defaultTimeout = defaultTimeout;
         this.jsonRpc = new JsonRpc(
             frame -> transport.send(frame),
             defaultTimeout);
@@ -46,7 +48,7 @@ public final class McpClient {
         } catch (Exception e) { throw new IllegalStateException(e); }
         var fut = jsonRpc.send("initialize", initParams);
         try {
-            JsonNode result = fut.get(5, TimeUnit.SECONDS);
+            JsonNode result = fut.get(defaultTimeout.toMillis(), TimeUnit.MILLISECONDS);
             String protocolVersion = textOr(result, "protocolVersion", null);
             if (!SUPPORTED_PROTOCOL_VERSIONS.contains(protocolVersion))
                 throw new McpProtocolException(-32000,
@@ -65,7 +67,7 @@ public final class McpClient {
         if (!cachedTools.isEmpty()) return cachedTools;
         var fut = jsonRpc.send("tools/list", null);
         try {
-            JsonNode result = fut.get(5, TimeUnit.SECONDS);
+            JsonNode result = fut.get(defaultTimeout.toMillis(), TimeUnit.MILLISECONDS);
             JsonNode arr = result.get("tools");
             List<McpToolDesc> descs = new ArrayList<>();
             if (arr != null && arr.isArray()) {
@@ -101,12 +103,12 @@ public final class McpClient {
     private McpCallResult extract(JsonNode result) {
         StringBuilder sb = new StringBuilder();
         boolean isError = result.path("isError").asBoolean(false);
-        JsonNode content = result.get("content");
-        if (content != null && content.isArray()) {
+        JsonNode content = result.path("content");
+        if (content.isArray()) {
             for (var c : content) {
                 String type = c.path("type").asText("");
                 switch (type) {
-                    case "text" -> sb.append(c.get("text").asText());
+                    case "text" -> sb.append(c.path("text").asText(""));
                     case "image", "audio" -> {
                         String data = c.path("data").asText("");
                         sb.append("[mcp: ").append(type)

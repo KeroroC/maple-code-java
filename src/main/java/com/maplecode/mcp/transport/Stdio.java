@@ -65,6 +65,7 @@ public final class Stdio implements McpTransport {
             stdin.write("\n");
             stdin.flush();
         } catch (IOException e) {
+            closed.set(true);
             throw new RuntimeException("stdio write failed", e);
         }
     }
@@ -80,6 +81,10 @@ public final class Stdio implements McpTransport {
             } catch (IOException e) {
                 if (!closed.get()) {
                     System.err.println(prefix + "stdout closed: " + e.getMessage());
+                }
+            } catch (Exception e) {
+                if (!closed.get()) {
+                    System.err.println(prefix + "reader crashed: " + e.getMessage());
                 }
             }
         }, "mcp-stdio-reader");

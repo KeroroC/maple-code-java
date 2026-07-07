@@ -82,6 +82,8 @@ public final class McpClientBootstrap {
         try {
             t = transportFactory.apply(spec);
         } catch (Exception e) {
+            System.err.println("[mcp:bootstrap] WARN: server '" + spec.name()
+                + "' transport creation failed: " + e.getMessage());
             return null;
         }
         McpClient client = new McpClient(t, "[" + spec.name() + "]", perCallTimeout);

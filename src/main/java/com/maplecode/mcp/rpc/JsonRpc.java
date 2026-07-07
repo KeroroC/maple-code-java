@@ -55,7 +55,25 @@ public final class JsonRpc implements AutoCloseable {
                 f.completeExceptionally(new McpTimeoutException(
                     "mcp call '" + method + "' (id=" + id + ") timed out after " + defaultTimeout.toMillis() + "ms"));
         }, defaultTimeout.toMillis(), TimeUnit.MILLISECONDS);
-        sink.apply(wire);
+        try {
+            var sendFut = sink.apply(wire);
+            if (sendFut != null) {
+                sendFut.whenComplete((v, err) -> {
+                    if (err != null) {
+                        var f = pending.remove(id);
+                        if (f != null && !f.isDone())
+                            f.completeExceptionally(
+                                new McpConnectionException("send failed: " + err.getMessage(), err));
+                    }
+                });
+            }
+        } catch (Exception e) {
+            var f = pending.remove(id);
+            if (f != null && !f.isDone())
+                f.completeExceptionally(
+                    new McpConnectionException("send failed: " + e.getMessage(), e));
+            return fut;
+        }
         return fut;
     }
 
