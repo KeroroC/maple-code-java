@@ -2,6 +2,7 @@ package com.maplecode;
 
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
+import com.maplecode.compression.*;
 import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
 import com.maplecode.mcp.adapter.McpToolAdapter;
@@ -43,6 +44,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 public final class App {
@@ -127,6 +129,19 @@ public final class App {
             raw.permissionMode());
         hitlCheck.setEngine(engine);
 
+        // 压缩系统（v6）
+        CompressionConfig compressionCfg = CompressionConfig.fromAppConfig(raw.contextWindow());
+        CompressionStorage compressionStorage = new CompressionStorage(
+            Paths.get(System.getProperty("user.home"), ".maplecode", "cache",
+                      "session-" + UUID.randomUUID()));
+        FailureCounter failureCounter = new FailureCounter(compressionCfg.failureThreshold());
+        CompressionContext compressionCtx = new CompressionContext(compressionCfg, compressionStorage, failureCounter);
+        Offloader offloader = new Offloader(compressionStorage);
+        ConversationSummarizer summarizer = new ConversationSummarizer(
+            provider, raw.model(), raw.summarizerModel());
+        CompressionCoordinator coord = new CompressionCoordinator(
+            compressionCtx, provider, offloader, summarizer);
+
         ToolExecutor executor = new ToolExecutor(registry, engine);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -136,6 +151,7 @@ public final class App {
                 }
             }
         }, "mcp-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(coord::close, "compression-shutdown"));
 
         // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);
@@ -148,7 +164,7 @@ public final class App {
             .withSystemBlocks(blocks);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
-            reader, registry, executor, engine, agentConfig);
+            reader, registry, executor, engine, agentConfig, coord);
         repl.run();
     }
 
