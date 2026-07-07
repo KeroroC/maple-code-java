@@ -47,6 +47,15 @@ public final class ChatSession {
         messages.clear();
     }
 
+    /**
+     * Coordinator 提交压缩产物：整批替换 messages。append-only 不变量整体被替换。
+     * 防御性拷贝：调用方继续修改传入 list 不影响 session。
+     */
+    public void replaceAll(List<ChatMessage> messages) {
+        this.messages.clear();
+        this.messages.addAll(List.copyOf(messages));
+    }
+
     public ChatRequest toRequest(String model, List<SystemBlock> systemBlocks,
                                  ThinkingConfig thinking, List<Tool> tools) {
         return new ChatRequest(model, systemBlocks,
