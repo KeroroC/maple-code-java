@@ -173,7 +173,17 @@ public final class ReplLoop {
             return;
         }
         for (var t : tools) {
-            printer.info("- " + t.name() + ": " + t.description());
+            String header = "- " + t.name() + ": ";
+            String[] lines = t.description().split("\n", -1);
+            printer.info(header + lines[0]);
+            String indent = " ".repeat(header.length());
+            for (int i = 1; i < lines.length; i++) {
+                if (lines[i].isBlank()) {
+                    printer.info("");   // 段落分隔走真正空行，避免尾随空格
+                } else {
+                    printer.info(indent + lines[i]);
+                }
+            }
         }
     }
 

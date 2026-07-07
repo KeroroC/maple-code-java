@@ -21,7 +21,7 @@ public final class McpToolAdapter {
 
     public static Tool of(McpClient client, McpToolDesc desc) {
         String synthetic = synthName(client.name(), desc.name());
-        String description = "[mcp:" + stripBrackets(client.name()) + "] " + desc.description();
+        String description = desc.description();
         JsonNode schema = desc.inputSchema();
         return new Tool() {
             @Override public String name() { return synthetic; }
@@ -66,9 +66,4 @@ public final class McpToolAdapter {
         return "mcp__" + server + "__" + toolName;
     }
 
-    private static String stripBrackets(String s) {
-        if (s.startsWith("[") && s.endsWith("]"))
-            return s.substring(1, s.length() - 1);
-        return s;
-    }
 }

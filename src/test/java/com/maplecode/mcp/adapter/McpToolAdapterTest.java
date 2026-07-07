@@ -28,7 +28,7 @@ class McpToolAdapterTest {
             m.readTree("{\"type\":\"object\"}"));
         var tool = McpToolAdapter.of(client, desc);
         assertEquals("mcp__gh__create_issue", tool.name());
-        assertTrue(tool.description().startsWith("[mcp:gh] "));
+        assertEquals("desc", tool.description());
     }
 
     @Test
