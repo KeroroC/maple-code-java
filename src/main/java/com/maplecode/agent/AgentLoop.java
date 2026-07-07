@@ -102,8 +102,16 @@ public final class AgentLoop {
                     || outcome.result() instanceof CompressionResult.ChangedFull) {
                     session.replaceAll(outcome.newMessages());
                     sink.accept(new AgentEvent.CompressionApplied(outcome.result()));
+                } else if (outcome.result() instanceof CompressionResult.FailedOffload f) {
+                    System.err.println("[compression] offload failed: " + f.reason());
+                } else if (outcome.result() instanceof CompressionResult.FailedSummary f) {
+                    System.err.println("[compression] summary failed ("
+                        + f.consecutiveFailures() + " consecutive): " + f.reason());
+                } else if (outcome.result() instanceof CompressionResult.SkippedCircuitOpen s) {
+                    System.err.println("[compression] circuit open ("
+                        + s.consecutiveFailures() + " failures); auto-compress disabled this session");
                 }
-                // SKIPPED_CIRCUIT_OPEN / FAILED_* / NOOP 静默继续
+                // NOOP 静默继续
             }
 
             sink.accept(new AgentEvent.IterationStart(iteration));
