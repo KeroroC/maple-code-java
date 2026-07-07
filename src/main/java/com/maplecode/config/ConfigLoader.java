@@ -67,9 +67,13 @@ public final class ConfigLoader {
 
         AppConfig.McpConfig mcp = parseMcpConfig(optionalMap(root, "mcp_servers"));
 
+        int contextWindow = root.get("context_window") instanceof Number nw ? nw.intValue() : 0;
+        String summarizerModel = optionalString(root, "summarizer_model");
+
         return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
             List.of(), thinking, new AppConfig.Timeouts(connect, read), mode,
-            new AppConfig.AgentLimits(maxIter, maxUnknown), mcp);
+            new AppConfig.AgentLimits(maxIter, maxUnknown), mcp,
+            contextWindow, summarizerModel);
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {

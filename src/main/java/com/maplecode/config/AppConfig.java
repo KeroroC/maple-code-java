@@ -18,8 +18,15 @@ public record AppConfig(
     Timeouts timeouts,
     PermissionMode permissionMode,
     AgentLimits agentLimits,
-    McpConfig mcpConfig                 // nullable；null 表示未配置 mcp_servers 块
+    McpConfig mcpConfig,                // nullable；null 表示未配置 mcp_servers 块
+    int contextWindow,                  // 0 = not configured
+    String summarizerModel              // null = not configured
 ) {
+
+    public AppConfig {
+        if (contextWindow < 0) throw new IllegalArgumentException("context_window must be >= 0");
+    }
+
     public record Timeouts(int connectSeconds, int readSeconds) {
         public Duration connectDuration() { return Duration.ofSeconds(connectSeconds); }
         public Duration readDuration() { return Duration.ofSeconds(readSeconds); }
