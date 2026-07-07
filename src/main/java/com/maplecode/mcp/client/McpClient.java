@@ -38,6 +38,9 @@ public final class McpClient {
         this.transport.onInbound(jsonRpc::handle);
     }
 
+    /**
+     * JSON-RPC initialize 握手
+     */
     public void initialize() {
         JsonNode initParams;
         try {
