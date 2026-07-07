@@ -4,8 +4,8 @@ import com.maplecode.error.ConfigException;
 
 public record ThinkingConfig(
     Type type,
-    Integer budgetTokens,        // only when type=ENABLED; >= 1024 and < max_tokens
-    Effort effort                // only when type=ADAPTIVE
+    Integer budgetTokens,        // 仅在 type=ENABLED 时使用；>= 1024 且 < max_tokens
+    Effort effort                // 仅在 type=ADAPTIVE 时使用
 ) {
     public enum Type { ADAPTIVE, ENABLED }
     public enum Effort { LOW, MEDIUM, HIGH }

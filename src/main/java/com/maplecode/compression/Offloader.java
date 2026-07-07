@@ -28,7 +28,7 @@ public final class Offloader {
             var offloadSet = new java.util.HashSet<Integer>();
             var toolResultIndices = new ArrayList<Integer>();
 
-            // First pass: identify tool results that exceed single threshold
+            // 第一轮遍历：识别超过单条阈值的 tool result
             for (int i = 0; i < blocks.size(); i++) {
                 if (blocks.get(i) instanceof ContentBlock.ToolResultBlock tr) {
                     int tokens = estimator.estimate(List.of(
@@ -40,13 +40,13 @@ public final class Offloader {
                 }
             }
 
-            // If no tool results, continue
+            // 若无 tool result，跳过
             if (toolResultIndices.isEmpty()) {
                 result.add(msg);
                 continue;
             }
 
-            // Check aggregate threshold for remaining tool results (not already marked)
+            // 检查剩余 tool result（未被标记的）的聚合阈值
             int sumTokens = 0;
             for (int i : toolResultIndices) {
                 if (!offloadSet.contains(i)) {
@@ -55,7 +55,7 @@ public final class Offloader {
                 }
             }
 
-            // If aggregate exceeds threshold, sort and offload until under threshold
+            // 若聚合值超过阈值，按大小降序排序并逐个 offload 直到低于阈值
             if (sumTokens > config.messageToolResultAggregateTokens()) {
                 var remaining = new ArrayList<>(toolResultIndices.stream()
                     .filter(i -> !offloadSet.contains(i))
@@ -75,13 +75,13 @@ public final class Offloader {
                 }
             }
 
-            // If nothing to offload, return original message
+            // 若无需 offload，返回原始消息
             if (offloadSet.isEmpty()) {
                 result.add(msg);
                 continue;
             }
 
-            // Build new blocks
+            // 构建新的 block 列表
             var newBlocks = new ArrayList<ContentBlock>(blocks.size());
             for (int i = 0; i < blocks.size(); i++) {
                 var b = blocks.get(i);

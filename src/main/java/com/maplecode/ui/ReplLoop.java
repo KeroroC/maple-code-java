@@ -53,7 +53,7 @@ public final class ReplLoop {
                 printer::usage, coord);
     }
 
-    /** 8-param backwards-compatible constructor (coord=null). */
+    /** 8 参数向后兼容构造器（coord=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
@@ -73,7 +73,7 @@ public final class ReplLoop {
                 // 阻塞式读取用户输入
                 input = readMultiline();
             } catch (UserInterruptException e) {
-                // Ctrl-C during input: cancel any running agent
+                // 输入时 Ctrl-C：取消正在运行的 agent
                 agent.cancel();
                 printer.info("(interrupted)");
                 continue;
@@ -176,7 +176,7 @@ public final class ReplLoop {
                 continue;
             }
 
-            // Normal turn: delegate to AgentLoop
+            // 普通对话：委托给 AgentLoop
             agent.run(trimmed, printer);
             printer.newline();
         }

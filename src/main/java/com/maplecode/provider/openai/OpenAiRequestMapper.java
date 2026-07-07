@@ -75,7 +75,7 @@ public final class OpenAiRequestMapper {
 
             return JSON.writeValueAsString(root);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("failed to serialize OpenAI request", e);
+            throw new IllegalStateException("序列化 OpenAI 请求失败", e);
         }
     }
 

@@ -73,7 +73,7 @@ public final class AnthropicRequestMapper {
                 }
             }
 
-            // tools 数组 —— Task 17 完整实现；本任务先留接口位置
+            // tools 数组 —— Task 17 完整实现
             if (req.tools() != null && !req.tools().isEmpty()) {
                 ArrayNode toolsArr = root.putArray("tools");
                 for (var tool : req.tools()) {
@@ -86,7 +86,7 @@ public final class AnthropicRequestMapper {
 
             return JSON.writeValueAsString(root);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("failed to serialize Anthropic request", e);
+            throw new IllegalStateException("序列化 Anthropic 请求失败", e);
         }
     }
 

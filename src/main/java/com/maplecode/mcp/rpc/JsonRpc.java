@@ -95,7 +95,7 @@ public final class JsonRpc implements AutoCloseable {
         JsonNode idNode = frame.get("id");
         JsonNode methodNode = frame.get("method");
         if (idNode == null && methodNode != null) {
-            // notification from server → ignore (V1)
+            // 服务端 notification → 忽略（V1）
             return;
         }
         if (idNode == null) return;

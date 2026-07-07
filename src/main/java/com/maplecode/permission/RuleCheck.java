@@ -55,7 +55,7 @@ public final class RuleCheck implements PermissionCheck {
     private static boolean matchTokens(String[] pat, int pi, String[] in, int ii) {
         while (pi < pat.length && ii < in.length) {
             if (pat[pi].equals("*")) {
-                // star matches zero or more input tokens
+                // * 匹配零个或多个输入 token
                 pi++;
                 while (ii <= in.length) {
                     if (matchTokens(pat, pi, in, ii)) return true;
@@ -63,17 +63,17 @@ public final class RuleCheck implements PermissionCheck {
                 }
                 return false;
             } else if (pat[pi].equals("?")) {
-                // question mark matches exactly one input token
+                // ? 恰好匹配一个输入 token
                 pi++;
                 ii++;
             } else {
-                // literal match
+                // 字面量匹配
                 if (!pat[pi].equals(in[ii])) return false;
                 pi++;
                 ii++;
             }
         }
-        // consume trailing stars in pattern
+        // 消耗 pattern 末尾的 *
         while (pi < pat.length && pat[pi].equals("*")) pi++;
         return pi == pat.length && ii == in.length;
     }

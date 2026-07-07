@@ -94,7 +94,7 @@ public final class ExecTool implements Tool {
         if (output.getBytes(StandardCharsets.UTF_8).length > OUTPUT_MAX_BYTES) {
             byte[] bytes = output.getBytes(StandardCharsets.UTF_8);
             String truncated = new String(bytes, 0, OUTPUT_MAX_BYTES, StandardCharsets.UTF_8);
-            // Trim back if we cut a multi-byte character in half
+            // 如果截断位置落在多字节字符中间，向前回退
             while (!truncated.isEmpty()
                     && truncated.getBytes(StandardCharsets.UTF_8).length > OUTPUT_MAX_BYTES) {
                 truncated = truncated.substring(0, truncated.length() - 1);

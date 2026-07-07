@@ -11,8 +11,8 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
- * Second-layer compression: calls LLM to produce a 5-section structured summary,
- * strips scratchpad, computes recency tail, and appends a boundary message.
+ * 第二层压缩：调用 LLM 生成包含 5 个章节的结构化摘要，
+ * 剥离 scratchpad，计算近期尾部，并附加边界消息。
  */
 public final class ConversationSummarizer {
 
@@ -94,9 +94,9 @@ public final class ConversationSummarizer {
     }
 
     /**
-     * Compress messages by generating a summary and computing recency tail.
+     * 通过生成摘要和计算近期尾部来压缩消息。
      *
-     * @return [summary USER msg] + recency tail + [boundary USER msg]
+     * @return [摘要 USER 消息] + 近期尾部 + [边界 USER 消息]
      */
     public List<ChatMessage> apply(List<ChatMessage> messages, CompressionConfig config) {
         String rawSummary = callSummarizer(messages);
@@ -125,8 +125,8 @@ public final class ConversationSummarizer {
             model,
             List.of(new SystemBlock(SUMMARY_SYSTEM_PROMPT, false, "summarizer")),
             messages,
-            null,  // no thinking
-            null   // no tools
+            null,  // 不启用 thinking
+            null   // 不使用工具
         );
 
         provider.stream(request, chunk -> {
@@ -145,14 +145,14 @@ public final class ConversationSummarizer {
     }
 
     private void validateSummary(String summary) {
-        // Check for refusal
+        // 检查是否包含拒绝标记
         for (String marker : REFUSAL_MARKERS) {
             if (summary.contains(marker)) {
                 throw new CompressionException("Summarizer refused: output contains '" + marker + "'");
             }
         }
 
-        // Check required sections
+        // 检查必需章节
         for (String section : REQUIRED_SECTIONS) {
             if (!summary.contains(section)) {
                 throw new CompressionException("Summarizer output missing required section: " + section);
@@ -161,7 +161,7 @@ public final class ConversationSummarizer {
     }
 
     /**
-     * Computes recency split: [0, tailStart) is compressed, [tailStart, size) is tail.
+     * 计算近期分割点：[0, tailStart) 被压缩，[tailStart, size) 保留为尾部。
      *
      * @return int[]{startIdx, tailLen}
      */
@@ -170,7 +170,7 @@ public final class ConversationSummarizer {
         int tailTokenBudget = config.recencyTokens();
         int minMessages = config.recencyMinMessages();
 
-        // Walk backwards from end, accumulate token estimate
+        // 从末尾向前遍历，累加 token 估算值
         int tokens = 0;
         int tailLen = 0;
         for (int i = size - 1; i >= 0; i--) {
@@ -182,7 +182,7 @@ public final class ConversationSummarizer {
             tailLen++;
         }
 
-        // Ensure minimum
+        // 确保最小消息数
         if (tailLen < minMessages) {
             tailLen = Math.min(minMessages, size);
         }
@@ -197,8 +197,8 @@ public final class ConversationSummarizer {
             if (block instanceof TextBlock tb) {
                 chars += tb.text().length();
             }
-            // ToolUseBlock/ToolResultBlock: rough estimate
-            chars += 100; // overhead per block
+            // ToolUseBlock/ToolResultBlock：粗略估算
+            chars += 100; // 每个 block 的额外开销
         }
         return Math.max(1, chars / CHARS_PER_TOKEN);
     }

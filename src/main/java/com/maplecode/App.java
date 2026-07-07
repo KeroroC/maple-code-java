@@ -111,7 +111,7 @@ public final class App {
         allTools.addAll(mcpTools);
         ToolRegistry registry = new ToolRegistry(allTools);
 
-        // Permission engine
+        // 权限引擎
         Path userPermFile = Paths.get(System.getProperty("user.home"), ".maplecode", "permissions.yaml");
         RuleSet ruleSet = PermissionFileLoader.loadAll(cwd, userPermFile);
 

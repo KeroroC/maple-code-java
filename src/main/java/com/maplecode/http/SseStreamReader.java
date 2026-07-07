@@ -31,7 +31,7 @@ public final class SseStreamReader {
                 }
                 // : 开头-注释或心跳，丢弃
                 if (line.startsWith(":")) {
-                    // comment / heartbeat — ignore
+                    // 注释 / 心跳 —— 忽略
                     continue;
                 }
                 // 事件类型：message、content_block_delta...
@@ -45,11 +45,11 @@ public final class SseStreamReader {
                     data.append(payload);
                     hasData = true;
                 } else if (line.startsWith("id:") || line.startsWith("retry:")) {
-                    // v1 doesn't handle
+                    // v1 暂不处理
                 }
-                // other fields — ignore
+                // 其他字段 —— 忽略
             }
-            // flush if stream ended without trailing blank line (SSE spec allows this)
+            // 如果流在没有尾随空行的情况下结束（SSE 规范允许），刷新剩余数据
             if (hasData) {
                 eventSink.accept(new SseEvent(currentEvent, data.toString()));
             }

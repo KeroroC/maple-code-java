@@ -19,8 +19,8 @@ public record AppConfig(
     PermissionMode permissionMode,
     AgentLimits agentLimits,
     McpConfig mcpConfig,                // nullable；null 表示未配置 mcp_servers 块
-    int contextWindow,                  // 0 = not configured
-    String summarizerModel              // null = not configured
+    int contextWindow,                  // 0 = 未配置
+    String summarizerModel              // null = 未配置
 ) {
 
     public AppConfig {

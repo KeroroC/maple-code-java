@@ -8,13 +8,13 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Path sandbox: denies file-system tools whose resolved path escapes the sandbox root.
+ * 路径沙箱：拒绝解析后路径逃逸沙箱根目录的文件系统工具。
  * <ul>
- *   <li>{@code read_file}, {@code write_file}, {@code edit_file}: symlink-resolved via
- *       {@link Path#toRealPath()} before prefix check.</li>
- *   <li>{@code glob} / {@code grep}: only {@link Path#normalize()} (patterns are not real
- *       paths); escapes are denied.</li>
- *   <li>{@code exec}: skipped entirely (not a path tool).</li>
+ *   <li>{@code read_file}、{@code write_file}、{@code edit_file}：通过
+ *       {@link Path#toRealPath()} 解析 symlink 后再做前缀检查。</li>
+ *   <li>{@code glob} / {@code grep}：仅使用 {@link Path#normalize()}（pattern 不是真实
+ *       路径）；逃逸则拒绝。</li>
+ *   <li>{@code exec}：完全跳过（不是路径工具）。</li>
  * </ul>
  */
 public final class SandboxCheck implements PermissionCheck {
@@ -46,7 +46,7 @@ public final class SandboxCheck implements PermissionCheck {
         String raw = pathNode.asText();
         Path requested = raw.startsWith("/") ? Path.of(raw) : req.cwd().resolve(raw);
 
-        // glob/grep pattern: use normalize (patterns aren't real files)
+        // glob/grep pattern：使用 normalize（pattern 不是真实文件）
         if (req.toolName().equals("glob") || req.toolName().equals("grep")) {
             Path normalized = requested.normalize();
             if (!normalized.startsWith(sandboxRoot)) {
@@ -56,12 +56,12 @@ public final class SandboxCheck implements PermissionCheck {
             return Optional.empty();
         }
 
-        // read_file / write_file / edit_file: resolve symlinks then prefix-check
+        // read_file / write_file / edit_file：解析 symlink 后做前缀检查
         Path real;
         try {
             real = requested.toRealPath();
         } catch (NoSuchFileException e) {
-            return Optional.empty();  // path doesn't exist -- not sandbox's concern
+            return Optional.empty();  // 路径不存在——不在沙箱管辖范围
         } catch (IOException e) {
             return Optional.of(Decision.deny("无法解析路径: " + e.getMessage()));
         }

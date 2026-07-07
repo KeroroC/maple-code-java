@@ -108,8 +108,8 @@ public final class OpenAiStreamParser {
                 if (name != null && !name.isEmpty()) {
                     acc.name = name;
                 }
-                // Emit ToolUseStart as soon as we have id + name, so the REPL
-                // can display the tool name during streaming (matches Anthropic behaviour).
+                // 一旦获得 id + name 就发出 ToolUseStart，使 REPL
+                // 能在流式过程中显示工具名称（与 Anthropic 行为一致）。
                 if (acc.id != null && acc.name != null && !acc.started) {
                     sink.accept(new StreamChunk.ToolUseStart(acc.id, acc.name));
                     acc.started = true;
@@ -166,7 +166,7 @@ public final class OpenAiStreamParser {
                     : JSON.readTree(acc.args.toString());
             } catch (Exception e) {
                 sink.accept(new StreamChunk.Error("tool_input_invalid",
-                    "tool input not valid JSON: " + e.getMessage()));
+                    "工具输入不是有效的 JSON: " + e.getMessage()));
                 continue;
             }
             sink.accept(new StreamChunk.ToolUseEnd(acc.id, acc.name == null ? "" : acc.name, input));

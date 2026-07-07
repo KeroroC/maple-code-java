@@ -114,11 +114,11 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
             case AgentEvent.ThinkingDelta d -> writeThinking(d.text());
             case AgentEvent.ToolCallStart s -> toolStart(s.name(), s.argSummary());
             case AgentEvent.ToolResult r -> toolEnd(r.name(), !r.isError(), r.isError() ? r.content() : null);
-            case AgentEvent.IterationStart i -> { /* silent */ }
-            case AgentEvent.IterationEnd i -> { /* silent */ }
-            case AgentEvent.BatchStart b -> { /* silent */ }
-            case AgentEvent.BatchEnd b -> { /* silent */ }
-            case AgentEvent.ToolCallEnd e -> { /* silent */ }
+            case AgentEvent.IterationStart i -> { /* 静默 */ }
+            case AgentEvent.IterationEnd i -> { /* 静默 */ }
+            case AgentEvent.BatchStart b -> { /* 静默 */ }
+            case AgentEvent.BatchEnd b -> { /* 静默 */ }
+            case AgentEvent.ToolCallEnd e -> { /* 静默 */ }
             case AgentEvent.AgentStop s -> info("[agent stopped: " + s.reason() + "]");
             case AgentEvent.CompressionApplied c -> {
                 System.err.println("[compression] applied: " + renderResult(c.result()));

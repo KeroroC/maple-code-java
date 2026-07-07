@@ -100,7 +100,7 @@ public final class AnthropicStreamParser {
                     input = JSON.readTree(currentToolJson.toString());
                 } catch (Exception e) {
                     sink.accept(new StreamChunk.Error("tool_input_invalid",
-                        "tool input not valid JSON: " + e.getMessage()));
+                        "工具输入不是有效的 JSON: " + e.getMessage()));
                     input = JSON.createObjectNode();
                 }
                 sink.accept(new StreamChunk.ToolUseEnd(currentToolUseId, currentToolName, input));
@@ -159,7 +159,7 @@ public final class AnthropicStreamParser {
         try {
             return JSON.readTree(data);
         } catch (Exception e) {
-            throw new IllegalStateException("failed to parse Anthropic SSE data: " + data, e);
+            throw new IllegalStateException("解析 Anthropic SSE 数据失败: " + data, e);
         }
     }
 }

@@ -107,7 +107,7 @@ public final class ConfigLoader {
                 + "    effort: high");
         }
 
-        // ThinkingConfig compact constructor handles all cross-field validation.
+        // ThinkingConfig 紧凑构造器处理所有跨字段校验。
         return new ThinkingConfig(type, budget, effort);
     }
 

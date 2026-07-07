@@ -77,7 +77,7 @@ public final class AgentLoop {
         StopReason finalStop = StopReason.END_TURN;
         String finalDetail = "assistant finished";
 
-        // PLAN mode: build a read-only executor for defense-in-depth
+        // PLAN 模式：构建只读 executor 实现纵深防御
         final ToolExecutor effectiveExecutor;
         if (config.planMode() == PlanMode.PLAN) {
             var readOnlyReg = new ToolRegistry(
@@ -109,7 +109,7 @@ public final class AgentLoop {
             sink.accept(new AgentEvent.IterationStart(iteration));
             ResponseCollector col = new ResponseCollector(sink, registry, usageSink);
 
-            // Wire layer: PLAN mode only exposes read-only tools to the model
+            // 接线层：PLAN 模式下只向模型暴露只读工具
             var tools = (config.planMode() == PlanMode.PLAN)
                 ? registry.readOnly()
                 : registry.all();
@@ -142,7 +142,7 @@ public final class AgentLoop {
                 col.usage()));
 
             if (col.stopReason() == StopReason.TOOL_USE && !col.toolUses().isEmpty()) {
-                // Build assistant content: text (if any) + all ToolUseBlocks
+                // 构建助手内容：文本（如有）+ 所有 ToolUseBlock
                 var assistantBlocks = new ArrayList<ContentBlock>();
                 if (!col.text().isEmpty()) {
                     assistantBlocks.add(new ContentBlock.TextBlock(col.text().toString()));
@@ -152,13 +152,13 @@ public final class AgentLoop {
                 }
                 session.appendAssistant(assistantBlocks);
 
-                // Partition by safety and execute
+                // 按安全性分批并执行
                 var batch = Batch.partition(col.toolUses(), registry);
                 sink.accept(new AgentEvent.BatchStart(batch.safe().size(), batch.unsafe().size()));
 
                 var results = new ArrayList<ToolResultPayload>();
 
-                // Safe tools: parallel execution
+                // 安全工具：并行执行
                 batch.safe().parallelStream().forEach(u -> {
                     var r = executeOne(u, effectiveExecutor);
                     synchronized (results) {
@@ -167,7 +167,7 @@ public final class AgentLoop {
                     sink.accept(new AgentEvent.ToolResult(u.id(), u.name(), r.isError(), r.content()));
                 });
 
-                // Unsafe tools: serial execution
+                // 非安全工具：串行执行
                 for (var u : batch.unsafe()) {
                     var r = executeOne(u, effectiveExecutor);
                     results.add(new ToolResultPayload(u.id(), r));
@@ -177,7 +177,7 @@ public final class AgentLoop {
                 int failed = (int) results.stream().filter(r -> r.result().isError()).count();
                 sink.accept(new AgentEvent.BatchEnd(results.size(), failed));
 
-                // Append all tool results as a single user message
+                // 将所有工具结果作为单条用户消息追加
                 var resultBlocks = new ArrayList<ContentBlock>();
                 for (var r : results) {
                     resultBlocks.add(new ContentBlock.ToolResultBlock(
@@ -185,7 +185,7 @@ public final class AgentLoop {
                 }
                 session.appendUser(resultBlocks);
 
-                // Track consecutive unknown tools
+                // 跟踪连续未知工具
                 int unknownThisBatch = 0;
                 for (var r : results) {
                     if (r.result().isError() && r.result().content() != null
@@ -211,7 +211,7 @@ public final class AgentLoop {
                 continue;
             }
 
-            // Non-tool response: append text and stop
+            // 非工具响应：追加文本并停止
             if (!col.text().isEmpty()) {
                 session.appendAssistant(List.of(new ContentBlock.TextBlock(col.text().toString())));
             }
