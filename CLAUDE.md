@@ -9,6 +9,8 @@ MapleCode 是一个极简的 Java 21 命令行工具，通过 SSE 与 Anthropic 
 - v2 工具系统：`docs/superpowers/specs/2026-07-03-maple-code-tool-system-design.md`
 - v3 Agent Loop：`docs/superpowers/specs/2026-07-04-maple-code-agent-loop-design.md`
 - v4 权限系统：`docs/superpowers/specs/2026-07-06-maple-code-permission-system-design.md`
+- v5 系统提示词：`docs/superpowers/specs/2026-07-05-maple-code-system-prompt-design.md`
+- v5 MCP 客户端：`docs/superpowers/specs/2026-07-06-maple-code-mcp-client-design.md`
 
 ## 构建 / 运行 / 测试
 
@@ -54,11 +56,12 @@ App.main
 
 核心抽象：
 
+- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock、`ui` REPL + AgentEvent printer、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`error` 异常类型。
 - **`LlmProvider`** —— 唯一方法 `void stream(ChatRequest, Consumer<StreamChunk>)`。同步推送，没有回调/future。新增后端只需实现该接口并在 `ProviderRegistry.factories` 注册工厂。
 - **`StreamChunk`** —— sealed 接口（`TextDelta | ThinkingDelta | MessageStart | MessageEnd | Error | ToolUseStart | ToolUseDelta | ToolUseEnd`）+ `StopReason` 枚举（含 `TOOL_USE`）。sealed 层次结构保证新增 chunk 变体时所有 `switch` 必须更新。
 - **`ContentBlock`** —— sealed 接口（`TextBlock | ToolUseBlock | ToolResultBlock`），用于表示消息内容。ChatMessage 的 content 从 String 改为 `List<ContentBlock>`。
 - **`Tool`** —— 工具接口（非 sealed），定义 `name()`、`description()`、`inputSchema()`、`execute()` 方法。6 个内置工具：read_file、write_file、edit_file、exec、glob、grep。
-- **`ToolRegistry`** —— 工具注册中心，`all()` 返回所有工具，`get(name)` 按名查找。
+- **`ToolRegistry`** —— 工具注册中心，启动时合并 6 个内置工具 + 所有 MCP 工具；命名空间 `mcp__<server>__<tool>` 防冲突；构造期同名重复即抛错。`all()` 返回所有工具，`get(name)` 按名查找。
 - **`ToolExecutor`** —— 工具执行器。先查 registry 找工具；再调 `engine.check(req)` 走权限管道（DENY → `ToolResult.error("权限拒绝: ...")`）；最后调 `tool.execute`。带完整错误兜底链：未知工具 → ToolException → 其他异常。单参构造器 `ToolExecutor(registry)` 跳过权限检查（PLAN mode 路径）。
 - **`SseStreamReader`** —— 协议无关。把按行流入的字节流切成 `SseEvent(eventType, data)`：多行 `data:` 按规范用 `\n` 拼接，注释/心跳丢弃。
 - **`ChatSession`** —— 一轮对话内只追加，并且只在成功时追加。用户消息在请求前追加；助手消息只在收到 `MessageEnd` 之后追加。如果流异常抛出，session 不动，用户可以重试。`/clear` 清空。
@@ -89,6 +92,35 @@ ToolExecutor.run()
 - **`HitlCheck.setEngine(engine)`** —— 后置注入打破构造期循环。构造时 engine=null，`App.main` 构造完 engine 后调一次 `setEngine`。
 - **规则文件**：`~/.maplecode/permissions.yaml`（用户全局）→ `<cwd>/.maplecode/permissions.yaml`（项目）→ `<cwd>/.maplecode/permissions.local.yaml`（项目本地），优先级 local > project > user。
 - **`/mode` 命令**：热切三档（strict / default / permissive），不持久化，重启回到 YAML 配置。
+
+### MCP 客户端（v5）
+
+- **`mcp_servers`** —— YAML 配置块（`enabled` 默认 true，`startup_timeout_ms` 默认 5000）。`maplecode.yaml.example` 末尾有完整示例。
+- **三层配置文件**（优先级从低到高，子 map deep-merge）：
+  - `~/.maplecode/mcp_servers.yaml` —— 用户全局
+  - `<cwd>/.maplecode/mcp_servers.yaml` —— 项目级（入 git）
+  - `<cwd>/.maplecode/mcp_servers.local.yaml` —— 项目本地（入 `.gitignore`）
+- **两种 transport**：`stdio`（子进程 + 行分隔 JSON）和 `http`（StreamableHttp POST，`${ENV}` 展开 headers）。Stdio 进程默认超时 30s。
+- **装配点**：`App.main` 调 `McpServerConfigLoader.loadAll` → `McpClientBootstrap.start`（并发启动 + 整体超时 + 单 server 失败 WARN 一行降级）→ `McpToolAdapter` 包装每个远端 tool 注入 `ToolRegistry`。MCP tool 走完整 `PermissionEngine` 管道，和内置工具一视同仁。
+- **诊断**：所有 MCP 内部日志走 stderr，前缀 `[mcp:<server>:stderr]`，**绝不写 stdout**（会污染 MCP wire）。
+- **非目标**：`resources` / `prompts` / `sampling` / `roots` / 通知 / 断点续传 / OAuth 均未实现。
+
+### REPL 斜杠命令
+
+| 命令 | 行为 |
+|---|---|
+| `/clear` | 清空 session 历史 |
+| `/tools` | 列出所有可用工具（内置 + MCP，含多行 description） |
+| `/plan <query>` | 规划模式：只读工具，模型只分析不执行 |
+| `/do` | 执行上一条规划 |
+| `/cancel` | 取消当前执行 |
+| `/mode [s\|d\|p]` | 查看或切换 strict/default/permissive |
+| `/exit` 或 Ctrl+D | 正常退出（退出码 0） |
+
+### 系统提示词（v5）
+
+- **`PromptAssembler`** —— 装配 system prompt，由 `DefaultSections` 提供静态块、`DynamicContext` 提供运行时上下文（cwd、平台、当前时间等）、`PlanModeReminder` 在 PLAN 模式下追加只读约束。
+- 配置项 `system_prompt`（顶层字符串）会作为额外 system block 注入；与内嵌块叠加。
 
 ## 值得注意的约定
 
