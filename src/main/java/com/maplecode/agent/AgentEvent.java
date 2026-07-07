@@ -1,6 +1,7 @@
 package com.maplecode.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.maplecode.compression.CompressionResult;
 import com.maplecode.provider.StreamChunk.StopReason;
 import com.maplecode.provider.TokenUsage;
 
@@ -22,7 +23,8 @@ public sealed interface AgentEvent
             AgentEvent.IterationEnd,
             AgentEvent.BatchStart,
             AgentEvent.BatchEnd,
-            AgentEvent.AgentStop {
+            AgentEvent.AgentStop,
+            AgentEvent.CompressionApplied {
 
     record TextDelta(String text) implements AgentEvent {}
     record ThinkingDelta(String text) implements AgentEvent {}
@@ -41,4 +43,6 @@ public sealed interface AgentEvent
     record BatchEnd(int totalTools, int failedTools) implements AgentEvent {}
 
     record AgentStop(StopReason reason, String detail) implements AgentEvent {}
+
+    record CompressionApplied(CompressionResult result) implements AgentEvent {}
 }

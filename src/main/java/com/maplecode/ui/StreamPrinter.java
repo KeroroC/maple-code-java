@@ -119,6 +119,7 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
             case AgentEvent.BatchEnd b -> { /* silent */ }
             case AgentEvent.ToolCallEnd e -> { /* silent */ }
             case AgentEvent.AgentStop s -> info("[agent stopped: " + s.reason() + "]");
+            case AgentEvent.CompressionApplied c -> { /* handled in T13 */ }
         }
     }
 }
