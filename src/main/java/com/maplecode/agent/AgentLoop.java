@@ -1,5 +1,8 @@
 package com.maplecode.agent;
 
+import com.maplecode.compression.CompressionCoordinator;
+import com.maplecode.compression.CompressionResult;
+import com.maplecode.compression.CompressionTrigger;
 import com.maplecode.error.ProviderException;
 import com.maplecode.prompt.PlanModeReminder;
 import com.maplecode.prompt.PromptAssembler;
@@ -25,24 +28,34 @@ public final class AgentLoop {
     private final ChatSession session;
     private AgentConfig config;
     private final Consumer<TokenUsage> usageSink;
+    private final CompressionCoordinator coord;  // nullable
     private volatile boolean cancelled;
 
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
-                     AgentConfig config, Consumer<TokenUsage> usageSink) {
+                     AgentConfig config, Consumer<TokenUsage> usageSink,
+                     CompressionCoordinator coord) {
         this.provider = provider;
         this.registry = registry;
         this.executor = executor;
         this.session = session;
         this.config = config;
         this.usageSink = usageSink;
+        this.coord = coord;
     }
 
-    /** 5 参重载（usageSink=null），保留测试路径。 */
+    /** 6 参重载（coord=null），保留调用兼容性。 */
+    public AgentLoop(LlmProvider provider, ToolRegistry registry,
+                     ToolExecutor executor, ChatSession session,
+                     AgentConfig config, Consumer<TokenUsage> usageSink) {
+        this(provider, registry, executor, session, config, usageSink, null);
+    }
+
+    /** 5 参重载（usageSink=null, coord=null），保留测试路径。 */
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
                      AgentConfig config) {
-        this(provider, registry, executor, session, config, null);
+        this(provider, registry, executor, session, config, null, null);
     }
 
     public void cancel() {
@@ -81,6 +94,16 @@ public final class AgentLoop {
                 finalStop = StopReason.USER_CANCELLED;
                 finalDetail = "user cancelled";
                 break;
+            }
+
+            if (coord != null && iteration > 0) {
+                var outcome = coord.beforeRequest(session, CompressionTrigger.AUTO, coord.lastSeenUsage());
+                if (outcome.result() instanceof CompressionResult.ChangedOffloadOnly
+                    || outcome.result() instanceof CompressionResult.ChangedFull) {
+                    session.replaceAll(outcome.newMessages());
+                    sink.accept(new AgentEvent.CompressionApplied(outcome.result()));
+                }
+                // SKIPPED_CIRCUIT_OPEN / FAILED_* / NOOP 静默继续
             }
 
             sink.accept(new AgentEvent.IterationStart(iteration));
