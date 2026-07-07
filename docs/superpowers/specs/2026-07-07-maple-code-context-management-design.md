@@ -40,7 +40,9 @@ App.main
   │       new CompressionStorage(home, sessionUuid),
   │       new FailureCounter())
   ├─ CompressionCoordinator coord = new CompressionCoordinator(
-  │       ctx, provider, estimator)
+  │       ctx, llmProvider, new TokenEstimator(),
+  │       new Offloader(storage),
+  │       new ConversationSummarizer(llmProvider, appConfig))
   ├─ AgentLoop(..., coord)                         // 扩：构造接 coord；run() 入口调用 beforeRequest
   └─ ReplLoop                                       // 扩：新增 /compress 命令
 
@@ -52,7 +54,12 @@ CompressionCoordinator.beforeRequest(session, trigger, lastUsage)
   ├─ int tokens = estimator.estimate(session.messages(), lastUsage)
   ├─ int threshold = config.window - marginFor(trigger)  // auto: -13K, manual: -3K
   ├─ if tokens < threshold:               return NOOP
-  ├─ List<ChatMessage> afterOffload = offloader.apply(session.messages(), config)
+  ├─ List<ChatMessage> afterOffload;
+  ├─ try:
+  │     afterOffload = offloader.apply(session.messages(), config)
+  ├─ catch CompressionException e:
+  │     log.warn("offload failed, leaving session untouched", e)
+  │     return FAILED_OFFLOAD                    // 不计 counter（off-load 不算摘要失败）
   ├─ int tokensAfter = estimator.estimate(afterOffload, lastUsage)
   ├─ if tokensAfter < threshold:
   │     session.replaceAll(afterOffload); return CHANGED_OFFLOAD_ONLY
@@ -63,7 +70,7 @@ CompressionCoordinator.beforeRequest(session, trigger, lastUsage)
   ├─ catch CompressionException e:
   │     counter.recordFailure()
   │     log.warn("summary failed ({} consecutive)", counter.failures(), e)
-  │     return FAILED
+  │     return FAILED_SUMMARY
 ```
 
 ### 2.2 抽象层级
@@ -72,13 +79,15 @@ CompressionCoordinator.beforeRequest(session, trigger, lastUsage)
 |---|---|---|
 | `CompressionConfig` | 阈值常量集中（窗口、余量、单条 / 聚合 off-load 阈、recency、preview、熔断）；从 `AppConfig` 派生 | 不持 IO / 状态 |
 | `CompressionContext` | 会话级不可变聚合：config + storage + counter | 不持 messages；不调 provider |
-| `CompressionStorage` | `~/.maplecode/cache/<session-uuid>/` 下写文件、清理目录、构造 preview 文本 | 不懂 ContentBlock 语义 |
+| `CompressionStorage` | `~/.maplecode/cache/<session-uuid>/` 下写文件（`Path write(String)`）、清理目录（`close()`）、构造 preview 文本（`String buildPreview(Path, String, int headLines, int tailLines)`） | 不懂 ContentBlock 语义；不持估算器 |
 | `TokenEstimator` | `chars / 4` 估算；可锚定 `TokenUsage.inputTokens`（首轮为 null） | 不持 IO / 状态 |
 | `FailureCounter` | `AtomicInteger` + `AtomicBoolean tripped`；提供 `recordSuccess / recordFailure / isTripped` | 不写日志（由 Coordinator 写） |
-| `Offloader` | 输入 `List<ChatMessage>`，按单条 + 聚合阈值改写 `ToolResultBlock.content` 为 preview；返回新 list | 不调 LLM；不动 `TextBlock` / `ToolUseBlock`；不动 assistant message |
+| `Offloader` | 输入 `List<ChatMessage>`，按单条 + 聚合阈值改写 `ToolResultBlock.content` 为 preview；返回新 list；写文件通过注入的 `CompressionStorage` | 不调 LLM；不动 `TextBlock` / `ToolUseBlock`；不动 assistant message |
 | `ConversationSummarizer` | 输入 `List<ChatMessage>`，取尾段、调 LLM 出 5 段摘要、拼 [summary USER] + [recency tail] + [boundary USER]；返回新 list | 不动 storage；不重试；摘要失败抛 `CompressionException` |
-| `CompressionCoordinator` | 唯一公开入口；编排 estimator → offloader → summarizer；统一错误处理；提交结果到 session | 不写 stdout（所有诊断走 stderr） |
+| `CompressionCoordinator` | 唯一公开入口；编排 estimator → offloader → summarizer；统一错误处理；提交结果到 session；维护 `lastSeenUsage`（每次 MessageEnd 推过来） | 不写 stdout（所有诊断走 stderr） |
 | `CompressionException` | 包内异常（流异常、5 段解析失败、refusal 等） | — |
+| `CompressionTrigger` | enum：`AUTO` / `MANUAL`，决定 margin | — |
+| `CompressionResult` | sealed：`NOOP` / `CHANGED_OFFLOAD_ONLY` / `CHANGED_FULL` / `FAILED_OFFLOAD` / `FAILED_SUMMARY` / `SKIPPED_CIRCUIT_OPEN` | — |
 
 ### 2.3 package 布局
 
@@ -92,7 +101,9 @@ com.maplecode.compression
 ├── Offloader.java
 ├── TokenEstimator.java
 ├── CompressionStorage.java
-└── CompressionException.java
+├── CompressionException.java
+├── CompressionTrigger.java            // enum AUTO / MANUAL
+└── CompressionResult.java             // sealed 6 变体
 ```
 
 ### 2.4 触发位置
@@ -161,6 +172,7 @@ com.maplecode.compression
    - `systemBlocks = List.of(summarySystemBlock)`，单条 system block 内容见 §3.4
    - `messages = messages.subList(0, startIdx)`（**待摘要部分**，不含 recency tail）
    - 调 `provider.stream(new ChatRequest(model, systemBlocks, messages, thinking=null, tools=empty), sink)`
+   - **`ConversationSummarizer` 构造期**接 `LlmProvider` + `AppConfig`，从 AppConfig 拿主 model + summarizer_model；不直接调 AppConfig 其他字段
 3. **消费流**：
    - `sink` 收集所有 `TextDelta` 到 `StringBuilder`
    - `MessageEnd` 触发，拿到 `usage`（仅用于日志，不写回）
@@ -225,7 +237,7 @@ OUTPUT FORMAT:
 - Do not include any prose before the scratchpad or after the last section.
 ```
 
-Coordinator 收到摘要文本后，**裁掉** `<scratchpad>...</scratchpad>` 段（按 `s/<scratchpad>.*?<\/scratchpad>//s` 正则，DOTALL），再做 5 段校验；裁掉后只剩 5 段正文。
+Coordinator 收到摘要文本后，**裁掉** `<scratchpad>...</scratchpad>` 段（Java 正则：`Pattern.compile("(?s)<scratchpad>.*?</scratchpad>").matcher(text).replaceAll("")`），再做 5 段校验；裁掉后只剩 5 段正文。
 
 ### 3.5 Boundary 消息
 
@@ -257,11 +269,12 @@ summary — always re-read.
 - `recordFailure()`：`failures++`；`if (failures >= threshold) tripped = true`
 - `recordSuccess()`：`failures = 0`（成功后清零，重新累积）
 - `isTripped()`：返回 `tripped`
+- `reset()`：`failures = 0` + `tripped = false`；由 `/clear` 命令调用，重置会话级状态
 - Coordinator 在 `beforeRequest` 开头查 `isTripped()`，若真则：
   - `trigger == AUTO` → 返回 `SKIPPED_CIRCUIT_OPEN`；stderr 一行 `[compression] circuit open (N failures), auto-compress disabled this session`；**session 不动**
   - `trigger == MANUAL` → 仍允许尝试；manual 失败也走同一个 counter
 - `threshold = 3`（`CompressionConfig.failureThreshold`）
-- `/clear` 不重置 counter（counter 跟 session 生命周期，不跟 ChatSession）；`/exit` 进程退出 → counter 跟着 JVM 没
+- `/clear` 调 `coord.resetCounter()` 清空状态（counter 跟 ChatSession 同生命周期，不跟进程生命周期）；`/exit` 进程退出 → counter 跟着 JVM 没
 
 ## 4. 配置格式
 
@@ -334,7 +347,9 @@ CompressionContext ctx = new CompressionContext(compressionCfg, storage, new Fai
 
 // 3. Coordinator（需要 provider，调 LLM 出摘要时复用）
 CompressionCoordinator coord = new CompressionCoordinator(
-    ctx, llmProvider, new TokenEstimator(), new Offloader(storage), new ConversationSummarizer());
+    ctx, llmProvider, new TokenEstimator(),
+    new Offloader(storage),
+    new ConversationSummarizer(llmProvider, appConfig));
 
 // 4. AgentLoop 接 coord
 AgentLoop agentLoop = new AgentLoop(
@@ -358,20 +373,20 @@ public void run(String userInput, Consumer<AgentEvent> sink) {
     int iteration = 0;
     while (iteration < config.maxIterations()) {
         if (iteration > 0) {  // 第一轮不压缩（还没东西可压）
-            TokenUsage lastUsage = lastSeenUsage;  // 上一轮 MessageEnd 拿到的
-            var result = coord.beforeRequest(session, CompressionTrigger.AUTO, lastUsage);
+            var result = coord.beforeRequest(session, CompressionTrigger.AUTO,
+                                             coord.lastSeenUsage());
             if (result == CompressionResult.CHANGED_OFFLOAD_ONLY
                 || result == CompressionResult.CHANGED_FULL) {
                 sink.accept(new AgentEvent.CompressionApplied(result));
             }
-            // SKIPPED_CIRCUIT_OPEN / FAILED / NOOP 都静默继续
+            // SKIPPED_CIRCUIT_OPEN / FAILED_* / NOOP 都静默继续
         }
         // ... 既有 LLM 调用 + tool 执行逻辑 ...
     }
 }
 ```
 
-`lastSeenUsage` 字段在每次 `MessageEnd` chunk 拿到时记录一次（已有 `usageSink` 流）。
+**Usage 注入路径**：AgentLoop 在每次收到 `StreamChunk.MessageEnd(usage)` 时调 `coord.recordUsage(usage)`（既有 `usageSink` 流加一路 Consumer；或直接改 `usageSink` 接受 list）。这样 Coordinator 维护的 `lastSeenUsage` 自动保持新鲜，不需要 AgentLoop 自己存字段。
 
 ### 5.3 ChatSession 改动
 
@@ -391,12 +406,19 @@ public void replaceAll(List<ChatMessage> messages) {
 
 ```java
 case "/compress":
-    var r = coord.beforeRequest(session, MANUAL, lastSeenUsage);
+    var r = coord.beforeRequest(session, MANUAL, coord.lastSeenUsage());
     printer.compressionResult(r);  // 打印 "压缩完成，offload N 处 / 摘要 M token" 等
+    continue;
+
+case "/clear":
+    agent.session().clear();
+    coord.resetCounter();            // counter 与 ChatSession 同生命周期；cache 文件不删
     continue;
 ```
 
-`/clear` 不调 `coord.close()`；`/exit` / Ctrl+D 走正常退出，shutdown hook 负责清理 cache 目录。
+- `/compress` 的 `lastSeenUsage` 从 `coord.lastSeenUsage()` 拿（Coordinator 维护，不从 ReplLoop 维护）
+- `printer.compressionResult(r)` 是 `StreamPrinter` 新增方法（既有 printer 是 `Consumer<AgentEvent>`，新方法独立签名）
+- `/clear` 不调 `coord.close()`；`/exit` / Ctrl+D 走正常退出，shutdown hook 负责清理 cache 目录
 
 ### 5.5 AgentEvent 新增
 
