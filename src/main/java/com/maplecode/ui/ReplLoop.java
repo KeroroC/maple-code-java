@@ -3,6 +3,9 @@ package com.maplecode.ui;
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
+import com.maplecode.compression.CompressionCoordinator;
+import com.maplecode.compression.CompressionResult;
+import com.maplecode.compression.CompressionTrigger;
 import com.maplecode.config.AppConfig;
 import com.maplecode.permission.PermissionEngine;
 import com.maplecode.permission.PermissionMode;
@@ -30,10 +33,12 @@ public final class ReplLoop {
     private final ChatSession session;
     private final AgentLoop agent;
     private AgentConfig agentConfig;
+    private final CompressionCoordinator coord;  // nullable
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
-                    PermissionEngine engine, AgentConfig agentConfig) {
+                    PermissionEngine engine, AgentConfig agentConfig,
+                    CompressionCoordinator coord) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -43,8 +48,16 @@ public final class ReplLoop {
         this.engine = engine;
         this.session = new ChatSession();
         this.agentConfig = agentConfig;
+        this.coord = coord;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
-                printer::usage);
+                printer::usage, coord);
+    }
+
+    /** 8-param backwards-compatible constructor (coord=null). */
+    public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
+                    LineReader reader, ToolRegistry registry, ToolExecutor executor,
+                    PermissionEngine engine, AgentConfig agentConfig) {
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -53,7 +66,7 @@ public final class ReplLoop {
     }
 
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
+        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/compress 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
         while (true) {
             String input;
             try {
@@ -77,7 +90,24 @@ public final class ReplLoop {
             // /clear
             if (trimmed.equals("/clear")) {
                 agent.session().clear();
+                if (coord != null) coord.resetCounter();
                 printer.info("history cleared");
+                continue;
+            }
+
+            // /compress
+            if (trimmed.equals("/compress")) {
+                if (coord == null) {
+                    printer.error("compression not enabled");
+                    continue;
+                }
+                var usage = coord.lastSeenUsage();
+                var outcome = coord.beforeRequest(agent.session(), CompressionTrigger.MANUAL, usage);
+                if (outcome.result() instanceof CompressionResult.ChangedOffloadOnly
+                    || outcome.result() instanceof CompressionResult.ChangedFull) {
+                    agent.session().replaceAll(outcome.newMessages());
+                }
+                printer.compressionResult(outcome.result());
                 continue;
             }
 
