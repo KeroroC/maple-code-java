@@ -1,4 +1,4 @@
 .idea
 target/
 maplecode.yaml
-.maplecode/permissions.local.yaml
+.maplecode/permissions.local.yaml.maplecode/

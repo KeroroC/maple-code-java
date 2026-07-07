@@ -66,7 +66,7 @@ public final class App {
         Map<String, McpClient> clients;
         AppConfig.McpConfig mcpCfg = raw.mcpConfig();
         if (mcpCfg == null || !mcpCfg.enabled()) {
-            if (mcpCfg != null && !mcpCfg.enabled()) {
+            if (mcpCfg != null) {
                 System.err.println("[mcp] disabled by config (mcp_servers.enabled=false)");
             }
             clients = Map.of();
@@ -79,6 +79,15 @@ public final class App {
                 clients = Map.of();
             } else {
                 clients = new McpClientBootstrap(mcpCfg.startupTimeoutDuration()).start(specs);
+                if (!clients.isEmpty()) {
+                    int total = clients.values().stream()
+                        .mapToInt(c -> { try { return c.cachedTools().size(); } catch (Exception e) { return 0; } })
+                        .sum();
+                    String names = clients.keySet().stream()
+                        .map(n -> n + " (" + clients.get(n).cachedTools().size() + " tools)")
+                        .reduce((a, b) -> a + ", " + b).orElse("");
+                    System.err.println("[mcp] connected: " + names + " — total " + total + " tools");
+                }
             }
         }
 
