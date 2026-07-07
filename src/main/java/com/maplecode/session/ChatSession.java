@@ -59,7 +59,7 @@ public final class ChatSession {
     public ChatRequest toRequest(String model, List<SystemBlock> systemBlocks,
                                  ThinkingConfig thinking, List<Tool> tools) {
         return new ChatRequest(model, systemBlocks,
-            Collections.unmodifiableList(new ArrayList<>(messages)),
+            Collections.unmodifiableList(messages),
             thinking, tools);
     }
 
