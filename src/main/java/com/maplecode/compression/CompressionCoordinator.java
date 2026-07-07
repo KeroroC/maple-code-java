@@ -93,7 +93,14 @@ public final class CompressionCoordinator {
         }
 
         // 步骤 3：运行 offloader（第一层）
-        List<ChatMessage> offloaded = offloader.apply(current, cfg);
+        List<ChatMessage> offloaded;
+        try {
+            offloaded = offloader.apply(current, cfg);
+        } catch (CompressionException e) {
+            return new CompressionOutcome(
+                new CompressionResult.FailedOffload(e.getMessage()),
+                null);
+        }
         int afterOffload = estimator.estimate(offloaded, anchor);
 
         if (afterOffload < threshold) {

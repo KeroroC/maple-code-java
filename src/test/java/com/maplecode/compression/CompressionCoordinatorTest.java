@@ -242,6 +242,33 @@ class CompressionCoordinatorTest {
         assertSame(usage2, coordinator.lastSeenUsage(), "lastSeenUsage should update to latest");
     }
 
+    // ---- Test 9: offloaderExceptionReturnsFailedOffload ----
+
+    @Test
+    void offloaderExceptionReturnsFailedOffload(@TempDir Path tmp) throws Exception {
+        var cfg = smallCfg();
+        var storage = new CompressionStorage(tmp.resolve("s"));
+        var counter = new FailureCounter(cfg.failureThreshold());
+        var ctx = new CompressionContext(cfg, storage, counter);
+
+        var offloader = mock(Offloader.class);
+        when(offloader.apply(any(), any()))
+            .thenThrow(new CompressionException("disk full"));
+
+        var summarizer = mock(ConversationSummarizer.class);
+        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+
+        var session = mockSession(largeMessages());
+        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+
+        assertInstanceOf(CompressionResult.FailedOffload.class, outcome.result());
+        var result = (CompressionResult.FailedOffload) outcome.result();
+        assertTrue(result.reason().contains("disk full"), "Reason should contain exception message");
+        assertNull(outcome.newMessages(), "Failed should have null newMessages");
+        assertEquals(0, counter.failures(), "Offload failure should NOT increment counter");
+        verifyNoInteractions(summarizer);
+    }
+
     // ---- Test 8: resetCounterClearsState ----
 
     @Test
