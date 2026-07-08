@@ -72,13 +72,11 @@ com.maplecode.agents
 ├── IncludeResolver.java             (递归展开 + 校验)
 ├── Concatenator.java                (静态方法 join + 截断)
 ├── AgentsMdLoader.java              (公开入口)
+├── AgentsMdSection.java             (实现 PromptSection)
 └── AgentsMdException.java           (运行时异常)
-
-com.maplecode.prompt.section
-└── AgentsMdSection.java             (实现 PromptSection)
 ```
 
-`AgentsMdSection` 放 `prompt/section/` 包下以遵循 v5 命名约定（与 `IdentitySection` / `EnvironmentSection` 等 11 个 section 同包）。`com.maplecode.agents` 包专管 loader 逻辑。
+`AgentsMdSection` 放 `agents` 包下以内聚所有 AGENTS.md 相关代码。与 v5 的 11 个静态 section（嵌套在 `DefaultSections.java`）性质不同，`AgentsMdSection` 是动态构造（每 session 一实例），放 agents 包更符合职责划分。
 
 ### 2.4 加载顺序与优先级
 
@@ -437,10 +435,8 @@ src/main/java/com/maplecode/agents/
 ├── IncludeResolver.java             (递归展开 + 校验)
 ├── Concatenator.java                (静态方法 join + 截断)
 ├── AgentsMdLoader.java              (公开入口)
+├── AgentsMdSection.java             (实现 PromptSection)
 └── AgentsMdException.java           (运行时异常)
-
-src/main/java/com/maplecode/prompt/section/
-└── AgentsMdSection.java             (实现 PromptSection)
 
 src/test/java/com/maplecode/agents/
 ├── LayerTest.java
@@ -448,9 +444,7 @@ src/test/java/com/maplecode/agents/
 ├── IncludeLimitsTest.java
 ├── IncludeResolverTest.java
 ├── ConcatenatorTest.java
-└── AgentsMdLoaderTest.java
-
-src/test/java/com/maplecode/prompt/section/
+├── AgentsMdLoaderTest.java
 └── AgentsMdSectionTest.java
 
 src/test/java/com/maplecode/prompt/
