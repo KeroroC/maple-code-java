@@ -48,6 +48,14 @@ public final class ChatSession {
         return messages.get(i);
     }
 
+    /**
+     * 返回最近 n 条消息的不可变副本。
+     */
+    public List<ChatMessage> recentMessages(int n) {
+        int from = Math.max(0, messages.size() - n);
+        return List.copyOf(messages.subList(from, messages.size()));
+    }
+
     public void clear() {
         messages.clear();
     }

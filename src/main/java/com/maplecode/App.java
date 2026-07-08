@@ -21,6 +21,8 @@ import com.maplecode.permission.RuleCheck;
 import com.maplecode.permission.RuleSet;
 import com.maplecode.permission.SandboxCheck;
 import com.maplecode.agents.AgentsMdLoader;
+import com.maplecode.memory.MemoryConfig;
+import com.maplecode.memory.MemoryManager;
 import com.maplecode.memory.MemoryScope;
 import com.maplecode.memory.MemoryStore;
 import com.maplecode.prompt.DefaultSections;
@@ -178,6 +180,14 @@ public final class App {
         String userMemory = memoryStore.loadIndexText(MemoryScope.USER);
         String projectMemory = memoryStore.loadIndexText(MemoryScope.PROJECT);
         String memoryContent = combineMemorySections(userMemory, projectMemory);
+
+        // 长期记忆管理器（v7.3）
+        MemoryConfig memoryCfg = MemoryConfig.fromAppConfig(raw);
+        MemoryManager memoryManager = null;
+        if (memoryCfg.enabled()) {
+            memoryManager = new MemoryManager(memoryCfg, provider, memoryStore, raw.model());
+            Runtime.getRuntime().addShutdownHook(new Thread(memoryManager::close, "memory-shutdown"));
+        }
         var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL,
             raw.yamlPrompt(), agentsMd, memoryContent);
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
@@ -187,7 +197,7 @@ public final class App {
             .withSystemBlocks(blocks);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
-            reader, registry, executor, engine, agentConfig, sessionArchive, coord);
+            reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager);
         repl.run();
     }
 

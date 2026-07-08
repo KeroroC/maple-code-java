@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChatSessionTest {
 
@@ -117,5 +118,42 @@ class ChatSessionTest {
         assertEquals(1, s.size());
         s.clear();
         assertEquals(0, s.size());
+    }
+
+    @Test
+    void recentMessages_returnsLastN() {
+        var s = new ChatSession();
+        s.appendUserText("a");
+        s.appendAssistantText("b");
+        s.appendUserText("c");
+        s.appendAssistantText("d");
+        var recent = s.recentMessages(2);
+        assertEquals(2, recent.size());
+        assertEquals("c", ((ContentBlock.TextBlock) recent.get(0).blocks().get(0)).text());
+        assertEquals("d", ((ContentBlock.TextBlock) recent.get(1).blocks().get(0)).text());
+    }
+
+    @Test
+    void recentMessages_returnsAll_whenNExceedsSize() {
+        var s = new ChatSession();
+        s.appendUserText("a");
+        var recent = s.recentMessages(10);
+        assertEquals(1, recent.size());
+    }
+
+    @Test
+    void recentMessages_returnsEmpty_whenSessionEmpty() {
+        var s = new ChatSession();
+        assertTrue(s.recentMessages(5).isEmpty());
+    }
+
+    @Test
+    void recentMessages_returnsDefensiveCopy() {
+        var s = new ChatSession();
+        s.appendUserText("a");
+        s.appendAssistantText("b");
+        var recent = s.recentMessages(2);
+        s.appendUserText("c");
+        assertEquals(2, recent.size());
     }
 }

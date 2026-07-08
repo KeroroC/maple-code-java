@@ -36,11 +36,13 @@ public final class ReplLoop {
     private AgentConfig agentConfig;
     private final SessionArchive sessionArchive;  // nullable
     private final CompactCoordinator coord;  // nullable
+    private final com.maplecode.memory.MemoryManager memoryManager;  // nullable
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig,
-                    SessionArchive sessionArchive, CompactCoordinator coord) {
+                    SessionArchive sessionArchive, CompactCoordinator coord,
+                    com.maplecode.memory.MemoryManager memoryManager) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -52,15 +54,16 @@ public final class ReplLoop {
         this.agentConfig = agentConfig;
         this.sessionArchive = sessionArchive;
         this.coord = coord;
+        this.memoryManager = memoryManager;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
                 printer::usage, coord);
     }
 
-    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null）。 */
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
-        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null);
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -69,7 +72,7 @@ public final class ReplLoop {
     }
 
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/new 新会话，/resume 恢复会话，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
+        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/new 新会话，/resume 恢复会话，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，/memory 记忆管理，\"\"\" 开始多行输入");
         while (true) {
             String input;
             try {
@@ -255,8 +258,44 @@ public final class ReplLoop {
                 continue;
             }
 
+            // /memory
+            if (trimmed.equals("/memory list")) {
+                if (memoryManager == null) {
+                    printer.error("memory not enabled");
+                } else {
+                    printer.info(memoryManager.listMemories());
+                }
+                continue;
+            }
+            if (trimmed.equals("/memory clear")) {
+                if (memoryManager == null) {
+                    printer.error("memory not enabled");
+                } else {
+                    memoryManager.clearAll();
+                    printer.info("all memories cleared");
+                }
+                continue;
+            }
+            if (trimmed.equals("/memory extract")) {
+                if (memoryManager == null) {
+                    printer.error("memory not enabled");
+                } else if (appConfig.memoryConfig() == null || !appConfig.memoryConfig().enabled()) {
+                    printer.error("memory not enabled in config");
+                } else {
+                    int maxCtx = appConfig.memoryConfig().maxContextMessages();
+                    memoryManager.extractSync(agent.session().recentMessages(maxCtx));
+                    printer.info("memory extraction completed");
+                }
+                continue;
+            }
+
             // 普通对话：委托给 AgentLoop
             agent.run(trimmed, printer);
+            // 记忆提取：异步，不阻塞用户交互
+            if (memoryManager != null && appConfig.memoryConfig() != null && appConfig.memoryConfig().enabled()) {
+                int maxCtx = appConfig.memoryConfig().maxContextMessages();
+                memoryManager.extractAsync(agent.session().recentMessages(maxCtx));
+            }
             printer.newline();
         }
 
