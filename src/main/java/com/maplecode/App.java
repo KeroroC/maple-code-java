@@ -20,6 +20,7 @@ import com.maplecode.permission.PrintStreamOutputSink;
 import com.maplecode.permission.RuleCheck;
 import com.maplecode.permission.RuleSet;
 import com.maplecode.permission.SandboxCheck;
+import com.maplecode.agents.AgentsMdLoader;
 import com.maplecode.prompt.DefaultSections;
 import com.maplecode.prompt.DynamicContext;
 import com.maplecode.prompt.PromptAssembler;
@@ -156,7 +157,12 @@ public final class App {
         // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);
         var tools = registry.all();
-        var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL, raw.yamlPrompt(), null);
+        // v7.1 新增：加载 AGENTS.md（启动期一次，跨整 session 缓存）
+        String agentsMd = AgentsMdLoader.load(
+            cwd,
+            Paths.get(System.getProperty("user.home")));
+        var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL,
+            raw.yamlPrompt(), agentsMd);
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
         var blocks = new PromptAssembler().assemble(sections, sectionCtx);
 
