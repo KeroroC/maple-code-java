@@ -104,13 +104,17 @@ public final class SessionArchive {
         Path exact = sessionsDir.resolve(idOrPrefix + ".jsonl");
         if (Files.exists(exact)) return exact;
         try (var stream = Files.list(sessionsDir)) {
-            return stream
+            var matches = stream
                 .filter(p -> {
                     String name = p.getFileName().toString();
                     return name.endsWith(".jsonl") && name.startsWith(idOrPrefix);
                 })
-                .findFirst()
-                .orElse(null);
+                .toList();
+            if (matches.size() > 1) {
+                throw new SessionArchiveException(
+                    "ambiguous prefix '" + idOrPrefix + "' matches " + matches.size() + " sessions");
+            }
+            return matches.isEmpty() ? null : matches.get(0);
         } catch (IOException e) {
             return null;
         }

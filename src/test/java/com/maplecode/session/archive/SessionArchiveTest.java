@@ -66,7 +66,8 @@ class SessionArchiveTest {
         archive.save(session);
 
         // 设置文件 mtime 为 31 天前
-        Path file = Files.list(tmp).filter(p -> p.toString().endsWith(".jsonl")).findFirst().orElseThrow();
+        Path file;
+        try (var s = Files.list(tmp)) { file = s.filter(p -> p.toString().endsWith(".jsonl")).findFirst().orElseThrow(); }
         Instant oldTime = Instant.now().minus(Duration.ofDays(31));
         file.toFile().setLastModified(oldTime.toEpochMilli());
 
@@ -91,5 +92,18 @@ class SessionArchiveTest {
     void loadNonexistentThrows(@TempDir Path tmp) {
         SessionArchive archive = new SessionArchive(tmp);
         assertThrows(SessionArchiveException.class, () -> archive.load("nonexistent"));
+    }
+
+    @Test
+    void loadAmbiguousPrefixThrows(@TempDir Path tmp) {
+        SessionArchive archive = new SessionArchive(tmp);
+        ChatSession s1 = new ChatSession();
+        s1.appendUserText("a");
+        archive.save(s1);
+        ChatSession s2 = new ChatSession();
+        s2.appendUserText("b");
+        archive.save(s2);
+        // 用短前缀（如 "20"）匹配多个 → 应抛异常
+        assertThrows(SessionArchiveException.class, () -> archive.load("20"));
     }
 }
