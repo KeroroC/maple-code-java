@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import org.junit.jupiter.api.Test;
 

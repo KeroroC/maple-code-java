@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;

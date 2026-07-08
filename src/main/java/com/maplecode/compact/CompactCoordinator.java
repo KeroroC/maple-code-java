@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.*;
 import com.maplecode.session.ChatSession;
@@ -9,23 +9,23 @@ import java.util.List;
  * 压缩协调器 —— 压缩功能的唯一公开入口。
  * 协调 offloader（第一层）和 summarizer（第二层），并集成熔断器。
  */
-public final class CompressionCoordinator {
+public final class CompactCoordinator {
 
     /**
      * 压缩尝试的结果，包含压缩结果和（若有变更）新的消息列表。
      * 调用方负责将 newMessages 应用到 session。
      */
-    public record CompressionOutcome(CompressionResult result, List<ChatMessage> newMessages) {}
+    public record CompactOutcome(CompactResult result, List<ChatMessage> newMessages) {}
 
-    private final CompressionContext ctx;
+    private final CompactContext ctx;
     private final Offloader offloader;
     private final ConversationSummarizer summarizer;
     private final TokenEstimator estimator = new TokenEstimator();
 
     private volatile TokenUsage lastSeenUsage;
 
-    public CompressionCoordinator(CompressionContext ctx, LlmProvider provider,
-                                  Offloader offloader, ConversationSummarizer summarizer) {
+    public CompactCoordinator(CompactContext ctx, LlmProvider provider,
+                              Offloader offloader, ConversationSummarizer summarizer) {
         this.ctx = ctx;
         this.offloader = offloader;
         this.summarizer = summarizer;
@@ -68,16 +68,16 @@ public final class CompressionCoordinator {
      * 3. 运行 offloader → 若已足够则返回 CHANGED_OFFLOAD_ONLY
      * 4. 运行 summarizer → 返回 CHANGED_FULL；在计数器上记录成功/失败
      *
-     * @return CompressionOutcome，包含结果和新消息列表（无变更时为 null）
+     * @return CompactOutcome，包含结果和新消息列表（无变更时为 null）
      */
-    public CompressionOutcome beforeRequest(ChatSession session, CompressionTrigger trigger,
-                                            TokenUsage anchorOverride) {
+    public CompactOutcome beforeRequest(ChatSession session, CompactTrigger trigger,
+                                        TokenUsage anchorOverride) {
         var cfg = ctx.config();
 
         // 步骤 1：熔断器检查 —— 仅自动触发
-        if (trigger == CompressionTrigger.AUTO && ctx.counter().isTripped()) {
-            return new CompressionOutcome(
-                new CompressionResult.SkippedCircuitOpen(ctx.counter().failures()),
+        if (trigger == CompactTrigger.AUTO && ctx.counter().isTripped()) {
+            return new CompactOutcome(
+                new CompactResult.SkippedCircuitOpen(ctx.counter().failures()),
                 null);
         }
 
@@ -89,24 +89,24 @@ public final class CompressionCoordinator {
         int estimated = estimator.estimate(current, anchor);
         int threshold = cfg.window() - cfg.marginFor(trigger);
         if (estimated < threshold) {
-            return new CompressionOutcome(new CompressionResult.Noop(), null);
+            return new CompactOutcome(new CompactResult.Noop(), null);
         }
 
         // 步骤 3：运行 offloader（第一层）
         List<ChatMessage> offloaded;
         try {
             offloaded = offloader.apply(current, cfg);
-        } catch (CompressionException e) {
-            return new CompressionOutcome(
-                new CompressionResult.FailedOffload(e.getMessage()),
+        } catch (CompactException e) {
+            return new CompactOutcome(
+                new CompactResult.FailedOffload(e.getMessage()),
                 null);
         }
         int afterOffload = estimator.estimate(offloaded, anchor);
 
         if (afterOffload < threshold) {
             // 仅 offload 即已足够
-            return new CompressionOutcome(
-                new CompressionResult.ChangedOffloadOnly(0),
+            return new CompactOutcome(
+                new CompactResult.ChangedOffloadOnly(0),
                 offloaded);
         }
 
@@ -115,13 +115,13 @@ public final class CompressionCoordinator {
             List<ChatMessage> summarized = summarizer.apply(offloaded, cfg);
             ctx.counter().recordSuccess();
             int summaryInputTokens = estimator.estimate(offloaded, anchor);
-            return new CompressionOutcome(
-                new CompressionResult.ChangedFull(0, summaryInputTokens),
+            return new CompactOutcome(
+                new CompactResult.ChangedFull(0, summaryInputTokens),
                 summarized);
-        } catch (CompressionException e) {
+        } catch (CompactException e) {
             ctx.counter().recordFailure();
-            return new CompressionOutcome(
-                new CompressionResult.FailedSummary(e.getMessage(), ctx.counter().failures()),
+            return new CompactOutcome(
+                new CompactResult.FailedSummary(e.getMessage(), ctx.counter().failures()),
                 null);
         }
     }

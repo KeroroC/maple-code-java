@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,17 +10,17 @@ import java.util.concurrent.atomic.AtomicLong;
  * 会话级文件存储。将 offload 的 tool result 落盘到 sessionDir。
  * 文件名格式：UUID-seq.txt（防冲突 + 可排序）。
  */
-public final class CompressionStorage {
+public final class CompactStorage {
 
     private final Path sessionDir;
     private final AtomicLong seq = new AtomicLong();
 
-    public CompressionStorage(Path sessionDir) {
+    public CompactStorage(Path sessionDir) {
         this.sessionDir = sessionDir;
         try {
             Files.createDirectories(sessionDir);
         } catch (IOException e) {
-            throw new CompressionException("cannot create session dir: " + sessionDir, e);
+            throw new CompactException("cannot create session dir: " + sessionDir, e);
         }
     }
 
@@ -35,7 +35,7 @@ public final class CompressionStorage {
             Files.writeString(target, content);
             return target;
         } catch (IOException e) {
-            throw new CompressionException("offload write failed: " + target, e);
+            throw new CompactException("offload write failed: " + target, e);
         }
     }
 

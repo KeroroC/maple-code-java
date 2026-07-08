@@ -2,7 +2,7 @@ package com.maplecode;
 
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
-import com.maplecode.compression.*;
+import com.maplecode.compact.*;
 import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
 import com.maplecode.mcp.adapter.McpToolAdapter;
@@ -130,17 +130,17 @@ public final class App {
         hitlCheck.setEngine(engine);
 
         // 压缩系统（v6）
-        CompressionConfig compressionCfg = CompressionConfig.fromAppConfig(raw.contextWindow());
-        CompressionStorage compressionStorage = new CompressionStorage(
+        CompactConfig compactCfg = CompactConfig.fromAppConfig(raw.contextWindow());
+        CompactStorage compactStorage = new CompactStorage(
             Paths.get(System.getProperty("user.home"), ".maplecode", "cache",
                       "session-" + UUID.randomUUID()));
-        FailureCounter failureCounter = new FailureCounter(compressionCfg.failureThreshold());
-        CompressionContext compressionCtx = new CompressionContext(compressionCfg, compressionStorage, failureCounter);
-        Offloader offloader = new Offloader(compressionStorage);
+        FailureCounter failureCounter = new FailureCounter(compactCfg.failureThreshold());
+        CompactContext compactCtx = new CompactContext(compactCfg, compactStorage, failureCounter);
+        Offloader offloader = new Offloader(compactStorage);
         ConversationSummarizer summarizer = new ConversationSummarizer(
             provider, raw.model(), raw.summarizerModel());
-        CompressionCoordinator coord = new CompressionCoordinator(
-            compressionCtx, provider, offloader, summarizer);
+        CompactCoordinator coord = new CompactCoordinator(
+            compactCtx, provider, offloader, summarizer);
 
         ToolExecutor executor = new ToolExecutor(registry, engine);
 
@@ -151,7 +151,7 @@ public final class App {
                 }
             }
         }, "mcp-shutdown"));
-        Runtime.getRuntime().addShutdownHook(new Thread(coord::close, "compression-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(coord::close, "compact-shutdown"));
 
         // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);

@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatMessage.Role;
@@ -10,14 +10,14 @@ import java.util.List;
 
 public final class Offloader {
 
-    private final CompressionStorage storage;
+    private final CompactStorage storage;
     private final TokenEstimator estimator = new TokenEstimator();
 
-    public Offloader(CompressionStorage storage) {
+    public Offloader(CompactStorage storage) {
         this.storage = storage;
     }
 
-    public List<ChatMessage> apply(List<ChatMessage> messages, CompressionConfig config) {
+    public List<ChatMessage> apply(List<ChatMessage> messages, CompactConfig config) {
         List<ChatMessage> result = new ArrayList<>(messages.size());
         for (var msg : messages) {
             if (msg.role() != Role.USER) {

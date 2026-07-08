@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.*;
 import com.maplecode.provider.ChatMessage.Role;
@@ -66,7 +66,7 @@ public final class ConversationSummarizer {
         """;
 
     private static final String BOUNDARY_MESSAGE = """
-        [Compression boundary] Above messages are summarized to fit context window.
+        [Compact boundary] Above messages are summarized to fit context window.
         Tool outputs marked "[Offloaded to ...]" were written to disk; to see exact
         code, file contents, or tool output, re-read from those absolute paths
         (they are stable for this session). Do NOT guess code or output from the
@@ -98,7 +98,7 @@ public final class ConversationSummarizer {
      *
      * @return [摘要 USER 消息] + 近期尾部 + [边界 USER 消息]
      */
-    public List<ChatMessage> apply(List<ChatMessage> messages, CompressionConfig config) {
+    public List<ChatMessage> apply(List<ChatMessage> messages, CompactConfig config) {
         String rawSummary = callSummarizer(messages);
         String summary = stripScratchpad(rawSummary);
         validateSummary(summary);
@@ -133,7 +133,7 @@ public final class ConversationSummarizer {
             if (chunk instanceof StreamChunk.TextDelta td) {
                 sb.append(td.text());
             } else if (chunk instanceof StreamChunk.Error e) {
-                throw new CompressionException("Summarizer provider error: " + e.code() + " - " + e.message());
+                throw new CompactException("Summarizer provider error: " + e.code() + " - " + e.message());
             }
         });
 
@@ -148,14 +148,14 @@ public final class ConversationSummarizer {
         // 检查是否包含拒绝标记
         for (String marker : REFUSAL_MARKERS) {
             if (summary.contains(marker)) {
-                throw new CompressionException("Summarizer refused: output contains '" + marker + "'");
+                throw new CompactException("Summarizer refused: output contains '" + marker + "'");
             }
         }
 
         // 检查必需章节
         for (String section : REQUIRED_SECTIONS) {
             if (!summary.contains(section)) {
-                throw new CompressionException("Summarizer output missing required section: " + section);
+                throw new CompactException("Summarizer output missing required section: " + section);
             }
         }
     }
@@ -165,7 +165,7 @@ public final class ConversationSummarizer {
      *
      * @return int[]{startIdx, tailLen}
      */
-    int[] computeRecencySplit(List<ChatMessage> messages, CompressionConfig config) {
+    int[] computeRecencySplit(List<ChatMessage> messages, CompactConfig config) {
         int size = messages.size();
         int tailTokenBudget = config.recencyTokens();
         int minMessages = config.recencyMinMessages();

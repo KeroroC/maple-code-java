@@ -1,8 +1,8 @@
 package com.maplecode.agent;
 
-import com.maplecode.compression.CompressionCoordinator;
-import com.maplecode.compression.CompressionResult;
-import com.maplecode.compression.CompressionTrigger;
+import com.maplecode.compact.CompactCoordinator;
+import com.maplecode.compact.CompactResult;
+import com.maplecode.compact.CompactTrigger;
 import com.maplecode.error.ProviderException;
 import com.maplecode.prompt.PlanModeReminder;
 import com.maplecode.prompt.PromptAssembler;
@@ -28,13 +28,13 @@ public final class AgentLoop {
     private final ChatSession session;
     private AgentConfig config;
     private final Consumer<TokenUsage> usageSink;
-    private final CompressionCoordinator coord;  // nullable
+    private final CompactCoordinator coord;  // nullable
     private volatile boolean cancelled;
 
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
                      AgentConfig config, Consumer<TokenUsage> usageSink,
-                     CompressionCoordinator coord) {
+                     CompactCoordinator coord) {
         this.provider = provider;
         this.registry = registry;
         this.executor = executor;
@@ -97,19 +97,19 @@ public final class AgentLoop {
             }
 
             if (coord != null && iteration > 0) {
-                var outcome = coord.beforeRequest(session, CompressionTrigger.AUTO, coord.lastSeenUsage());
-                if (outcome.result() instanceof CompressionResult.ChangedOffloadOnly
-                    || outcome.result() instanceof CompressionResult.ChangedFull) {
+                var outcome = coord.beforeRequest(session, CompactTrigger.AUTO, coord.lastSeenUsage());
+                if (outcome.result() instanceof CompactResult.ChangedOffloadOnly
+                    || outcome.result() instanceof CompactResult.ChangedFull) {
                     session.replaceAll(outcome.newMessages());
-                    sink.accept(new AgentEvent.CompressionApplied(outcome.result()));
-                } else if (outcome.result() instanceof CompressionResult.FailedOffload f) {
-                    System.err.println("[compression] offload failed: " + f.reason());
-                } else if (outcome.result() instanceof CompressionResult.FailedSummary f) {
-                    System.err.println("[compression] summary failed ("
+                    sink.accept(new AgentEvent.CompactApplied(outcome.result()));
+                } else if (outcome.result() instanceof CompactResult.FailedOffload f) {
+                    System.err.println("[compact] offload failed: " + f.reason());
+                } else if (outcome.result() instanceof CompactResult.FailedSummary f) {
+                    System.err.println("[compact] summary failed ("
                         + f.consecutiveFailures() + " consecutive): " + f.reason());
-                } else if (outcome.result() instanceof CompressionResult.SkippedCircuitOpen s) {
-                    System.err.println("[compression] circuit open ("
-                        + s.consecutiveFailures() + " failures); auto-compress disabled this session");
+                } else if (outcome.result() instanceof CompactResult.SkippedCircuitOpen s) {
+                    System.err.println("[compact] circuit open ("
+                        + s.consecutiveFailures() + " failures); auto-compact disabled this session");
                 }
                 // NOOP 静默继续
             }

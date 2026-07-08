@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatMessage.Role;

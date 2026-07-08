@@ -1,7 +1,7 @@
 package com.maplecode.ui;
 
 import com.maplecode.agent.AgentEvent;
-import com.maplecode.compression.CompressionResult;
+import com.maplecode.compact.CompactResult;
 import com.maplecode.provider.TokenUsage;
 
 import java.io.PrintStream;
@@ -120,33 +120,33 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
             case AgentEvent.BatchEnd b -> { /* 静默 */ }
             case AgentEvent.ToolCallEnd e -> { /* 静默 */ }
             case AgentEvent.AgentStop s -> info("[agent stopped: " + s.reason() + "]");
-            case AgentEvent.CompressionApplied c -> {
-                System.err.println("[compression] applied: " + renderResult(c.result()));
+            case AgentEvent.CompactApplied c -> {
+                System.err.println("[compact] applied: " + renderResult(c.result()));
             }
         }
     }
 
     /**
-     * ReplLoop /compress 命令显式调用：打印结果到 stdout。
+     * ReplLoop /compact 命令显式调用：打印结果到 stdout。
      */
-    public void compressionResult(CompressionResult r) {
+    public void compactResult(CompactResult r) {
         out.println(renderResult(r));
     }
 
-    private String renderResult(CompressionResult r) {
+    private String renderResult(CompactResult r) {
         return switch (r) {
-            case CompressionResult.Noop n -> "[compression] noop: below threshold";
-            case CompressionResult.ChangedOffloadOnly o ->
-                "[compression] offloaded " + o.offloadedCount() + " tool result(s)";
-            case CompressionResult.ChangedFull f ->
-                "[compression] full compression: offloaded " + f.offloadedCount()
+            case CompactResult.Noop n -> "[compact] noop: below threshold";
+            case CompactResult.ChangedOffloadOnly o ->
+                "[compact] offloaded " + o.offloadedCount() + " tool result(s)";
+            case CompactResult.ChangedFull f ->
+                "[compact] full compact: offloaded " + f.offloadedCount()
                     + ", summary covered ~" + f.summaryInputTokens() + " input tokens";
-            case CompressionResult.FailedOffload f ->
-                "[compression] offload failed: " + f.reason();
-            case CompressionResult.FailedSummary f ->
-                "[compression] summary failed (" + f.consecutiveFailures() + " consecutive): " + f.reason();
-            case CompressionResult.SkippedCircuitOpen s ->
-                "[compression] circuit open (" + s.consecutiveFailures() + " failures); auto-compress disabled this session";
+            case CompactResult.FailedOffload f ->
+                "[compact] offload failed: " + f.reason();
+            case CompactResult.FailedSummary f ->
+                "[compact] summary failed (" + f.consecutiveFailures() + " consecutive): " + f.reason();
+            case CompactResult.SkippedCircuitOpen s ->
+                "[compact] circuit open (" + s.consecutiveFailures() + " failures); auto-compact disabled this session";
         };
     }
 }

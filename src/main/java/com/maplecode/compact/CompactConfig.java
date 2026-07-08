@@ -1,6 +1,6 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
-public record CompressionConfig(
+public record CompactConfig(
     int window,
     int autoMargin,
     int manualMargin,
@@ -12,7 +12,7 @@ public record CompressionConfig(
     int previewTailLines,
     int failureThreshold
 ) {
-    public CompressionConfig {
+    public CompactConfig {
         if (window < 1000) throw new IllegalArgumentException("window must be >= 1000");
         if (autoMargin < 0) throw new IllegalArgumentException("autoMargin must be >= 0");
         if (manualMargin < 0) throw new IllegalArgumentException("manualMargin must be >= 0");
@@ -38,9 +38,9 @@ public record CompressionConfig(
     public static final int DEFAULT_PREVIEW_TAIL_LINES = 4;
     public static final int DEFAULT_FAILURE_THRESHOLD = 3;
 
-    public static CompressionConfig fromAppConfig(int yamlContextWindow) {
+    public static CompactConfig fromAppConfig(int yamlContextWindow) {
         int window = yamlContextWindow > 0 ? yamlContextWindow : DEFAULT_WINDOW;
-        return new CompressionConfig(
+        return new CompactConfig(
             window, DEFAULT_AUTO_MARGIN, DEFAULT_MANUAL_MARGIN,
             DEFAULT_SINGLE_TOOL_RESULT_OFFLOAD_TOKENS,
             DEFAULT_MESSAGE_TOOL_RESULT_AGGREGATE_TOKENS,
@@ -49,7 +49,7 @@ public record CompressionConfig(
             DEFAULT_FAILURE_THRESHOLD);
     }
 
-    public int marginFor(CompressionTrigger trigger) {
+    public int marginFor(CompactTrigger trigger) {
         return switch (trigger) {
             case AUTO -> autoMargin;
             case MANUAL -> manualMargin;

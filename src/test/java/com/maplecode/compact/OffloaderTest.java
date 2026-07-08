@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ChatMessage.Role;
@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OffloaderTest {
 
-    private static final CompressionConfig CFG = new CompressionConfig(
+    private static final CompactConfig CFG = new CompactConfig(
         200_000, 13_000, 3_000,
         8_000, 30_000,
         10_000, 5,
@@ -38,7 +38,7 @@ class OffloaderTest {
 
     @Test
     void singleBigResultGetsOffloaded(@TempDir Path tmp) throws Exception {
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var offloader = new Offloader(storage);
         var msg = new ChatMessage(Role.USER, List.of(bigResult(40_000))); // 10K tokens
         var out = offloader.apply(List.of(msg), CFG);
@@ -50,7 +50,7 @@ class OffloaderTest {
 
     @Test
     void shortContentPreviewSkipsHeadTail(@TempDir Path tmp) throws Exception {
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var offloader = new Offloader(storage);
         // 8K tokens = 32K chars → 超 single threshold, but short lines
         String content = "line1\nline2\nline3\nline4\nline5";
@@ -63,7 +63,7 @@ class OffloaderTest {
 
     @Test
     void assistantMessagesUnchanged(@TempDir Path tmp) throws Exception {
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var offloader = new Offloader(storage);
         var asst = new ChatMessage(Role.ASSISTANT,
             List.of(new ContentBlock.TextBlock("x".repeat(100_000))));
@@ -73,7 +73,7 @@ class OffloaderTest {
 
     @Test
     void toolUseBlockUnchanged(@TempDir Path tmp) throws Exception {
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var offloader = new Offloader(storage);
         var tue = new ContentBlock.ToolUseBlock("tu-1", "read_file",
             new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("path", "/foo"));

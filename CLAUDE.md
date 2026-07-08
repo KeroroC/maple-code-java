@@ -56,7 +56,7 @@ App.main
 
 核心抽象：
 
-- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock、`ui` REPL + AgentEvent printer、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`error` 异常类型。
+- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock、`ui` REPL + AgentEvent printer、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`compact` 压缩（v6）、`error` 异常类型。
 - **`LlmProvider`** —— 唯一方法 `void stream(ChatRequest, Consumer<StreamChunk>)`。同步推送，没有回调/future。新增后端只需实现该接口并在 `ProviderRegistry.factories` 注册工厂。
 - **`StreamChunk`** —— sealed 接口（`TextDelta | ThinkingDelta | MessageStart | MessageEnd | Error | ToolUseStart | ToolUseDelta | ToolUseEnd`）+ `StopReason` 枚举（含 `TOOL_USE`）。sealed 层次结构保证新增 chunk 变体时所有 `switch` 必须更新。
 - **`ContentBlock`** —— sealed 接口（`TextBlock | ToolUseBlock | ToolResultBlock`），用于表示消息内容。ChatMessage 的 content 从 String 改为 `List<ContentBlock>`。
@@ -110,6 +110,7 @@ ToolExecutor.run()
 | 命令 | 行为 |
 |---|---|
 | `/clear` | 清空 session 历史 |
+| `/compact` | 手动压缩上下文 |
 | `/tools` | 列出所有可用工具（内置 + MCP，含多行 description） |
 | `/plan <query>` | 规划模式：只读工具，模型只分析不执行 |
 | `/do` | 执行上一条规划 |

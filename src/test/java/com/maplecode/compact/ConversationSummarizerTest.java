@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.*;
 import com.maplecode.provider.ChatMessage.Role;
@@ -40,7 +40,7 @@ class ConversationSummarizerTest {
         Add multiply and divide methods to complete the calculator.
         """;
 
-    private static final CompressionConfig CFG = new CompressionConfig(
+    private static final CompactConfig CFG = new CompactConfig(
         200_000, 13_000, 3_000,
         8_000, 30_000,
         10_000, 5,
@@ -105,7 +105,7 @@ class ConversationSummarizerTest {
         ChatMessage boundary = result.get(result.size() - 1);
         assertEquals(Role.USER, boundary.role());
         String boundaryText = ((TextBlock) boundary.blocks().get(0)).text();
-        assertTrue(boundaryText.contains("[Compression boundary]"),
+        assertTrue(boundaryText.contains("[Compact boundary]"),
             "Last message should be boundary");
         assertTrue(boundaryText.contains("Do NOT guess code"),
             "Boundary should warn against guessing");
@@ -150,9 +150,9 @@ class ConversationSummarizerTest {
         var summarizer = new ConversationSummarizer(provider, "model-main", null);
         List<ChatMessage> messages = buildMessages(10);
 
-        assertThrows(CompressionException.class,
+        assertThrows(CompactException.class,
             () -> summarizer.apply(messages, CFG),
-            "Missing section should throw CompressionException");
+            "Missing section should throw CompactException");
     }
 
     @Test
@@ -162,9 +162,9 @@ class ConversationSummarizerTest {
         var summarizer = new ConversationSummarizer(provider, "model-main", null);
         List<ChatMessage> messages = buildMessages(10);
 
-        assertThrows(CompressionException.class,
+        assertThrows(CompactException.class,
             () -> summarizer.apply(messages, CFG),
-            "Refusal should throw CompressionException");
+            "Refusal should throw CompactException");
     }
 
     @Test
@@ -180,9 +180,9 @@ class ConversationSummarizerTest {
         var summarizer = new ConversationSummarizer(provider, "model-main", null);
         List<ChatMessage> messages = buildMessages(10);
 
-        assertThrows(CompressionException.class,
+        assertThrows(CompactException.class,
             () -> summarizer.apply(messages, CFG),
-            "Error chunk should throw CompressionException");
+            "Error chunk should throw CompactException");
     }
 
     @Test

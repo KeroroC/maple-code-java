@@ -1,4 +1,4 @@
-package com.maplecode.compression;
+package com.maplecode.compact;
 
 import com.maplecode.provider.*;
 import com.maplecode.provider.ChatMessage.Role;
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-class CompressionCoordinatorTest {
+class CompactCoordinatorTest {
 
     private static List<ChatMessage> largeMessages() {
         // ~38,000 chars → ~9,500 tokens (exceeds threshold in small-window configs)
@@ -29,9 +29,9 @@ class CompressionCoordinatorTest {
             new ChatMessage(Role.USER, List.of(new TextBlock("x".repeat(2_000)))));
     }
 
-    private static CompressionConfig smallCfg() {
+    private static CompactConfig smallCfg() {
         // window=10,000, autoMargin=1,000 → auto threshold = 9,000 tokens
-        return new CompressionConfig(
+        return new CompactConfig(
             10_000, 1_000, 500,
             8_000, 30_000,
             5_000, 3,
@@ -55,18 +55,18 @@ class CompressionCoordinatorTest {
     @Test
     void belowThresholdReturnsNoop(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         var offloader = mock(Offloader.class);
         var summarizer = mock(ConversationSummarizer.class);
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(smallMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-       assertInstanceOf(CompressionResult.Noop.class, outcome.result());
+       assertInstanceOf(CompactResult.Noop.class, outcome.result());
         assertNull(outcome.newMessages(), "NOOP should have null newMessages");
         verifyNoInteractions(offloader, summarizer);
     }
@@ -76,9 +76,9 @@ class CompressionCoordinatorTest {
     @Test
     void offloadOnlyReturnsNewMessages(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         // Offload brings tokens under threshold: 8,000 chars → 2,000 tokens < 9,000
         List<ChatMessage> offloaded = smallMessages();
@@ -86,13 +86,13 @@ class CompressionCoordinatorTest {
         when(offloader.apply(any(), any())).thenReturn(offloaded);
 
         var summarizer = mock(ConversationSummarizer.class);
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-       assertInstanceOf(CompressionResult.ChangedOffloadOnly.class, outcome.result());
-        var result = (CompressionResult.ChangedOffloadOnly) outcome.result();
+       assertInstanceOf(CompactResult.ChangedOffloadOnly.class, outcome.result());
+        var result = (CompactResult.ChangedOffloadOnly) outcome.result();
         assertEquals(0, result.offloadedCount(), "Mock offloader returns 0 by default");
         assertNotNull(outcome.newMessages(), "Changed should have non-null newMessages");
         verify(offloader).apply(any(), any());
@@ -104,9 +104,9 @@ class CompressionCoordinatorTest {
     @Test
     void offloadInsufficientCallsSummarizer(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         // Offload returns messages still too large: 38,000 chars → 9,500 tokens > 9,000
         var offloader = mock(Offloader.class);
@@ -116,13 +116,13 @@ class CompressionCoordinatorTest {
         var summarizer = mock(ConversationSummarizer.class);
         when(summarizer.apply(any(), any())).thenReturn(smallMessages());
 
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-        assertInstanceOf(CompressionResult.ChangedFull.class, outcome.result());
-        var result = (CompressionResult.ChangedFull) outcome.result();
+        assertInstanceOf(CompactResult.ChangedFull.class, outcome.result());
+        var result = (CompactResult.ChangedFull) outcome.result();
         assertEquals(0, result.offloadedCount(), "Mock offloader returns 0 by default");
         assertTrue(result.summaryInputTokens() > 0, "summaryInputTokens should be > 0");
         assertNotNull(outcome.newMessages());
@@ -136,24 +136,24 @@ class CompressionCoordinatorTest {
     @Test
     void summarizerExceptionIncrementsCounter(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         var offloader = mock(Offloader.class);
         when(offloader.apply(any(), any())).thenReturn(largeMessages());
 
         var summarizer = mock(ConversationSummarizer.class);
         when(summarizer.apply(any(), any()))
-            .thenThrow(new CompressionException("LLM refused"));
+            .thenThrow(new CompactException("LLM refused"));
 
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-        assertInstanceOf(CompressionResult.FailedSummary.class, outcome.result());
-        var result = (CompressionResult.FailedSummary) outcome.result();
+        assertInstanceOf(CompactResult.FailedSummary.class, outcome.result());
+        var result = (CompactResult.FailedSummary) outcome.result();
         assertEquals(1, result.consecutiveFailures(), "Counter should be 1 after first failure");
         assertEquals(1, counter.failures(), "Counter state should be 1");
         assertTrue(result.reason().contains("LLM refused"), "Reason should contain exception message");
@@ -165,9 +165,9 @@ class CompressionCoordinatorTest {
     @Test
     void trippedCounterSkipsAuto(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         // Trip the counter: 3 failures (threshold=3)
         counter.recordFailure();
@@ -177,13 +177,13 @@ class CompressionCoordinatorTest {
 
         var offloader = mock(Offloader.class);
         var summarizer = mock(ConversationSummarizer.class);
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-        assertInstanceOf(CompressionResult.SkippedCircuitOpen.class, outcome.result());
-        var result = (CompressionResult.SkippedCircuitOpen) outcome.result();
+        assertInstanceOf(CompactResult.SkippedCircuitOpen.class, outcome.result());
+        var result = (CompactResult.SkippedCircuitOpen) outcome.result();
         assertEquals(3, result.consecutiveFailures());
         verifyNoInteractions(offloader, summarizer);
     }
@@ -193,9 +193,9 @@ class CompressionCoordinatorTest {
     @Test
     void trippedCounterAllowsManual(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         // Trip the counter
         counter.recordFailure();
@@ -207,13 +207,13 @@ class CompressionCoordinatorTest {
         when(offloader.apply(any(), any())).thenReturn(smallMessages());
 
         var summarizer = mock(ConversationSummarizer.class);
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.MANUAL, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.MANUAL, null);
 
         // Should NOT be SkippedCircuitOpen — manual bypasses circuit breaker
-        assertInstanceOf(CompressionResult.ChangedOffloadOnly.class, outcome.result());
+        assertInstanceOf(CompactResult.ChangedOffloadOnly.class, outcome.result());
         verify(offloader).apply(any(), any());
     }
 
@@ -222,11 +222,11 @@ class CompressionCoordinatorTest {
     @Test
     void recordUsageUpdatesLastSeen(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(),
+        var coordinator = new CompactCoordinator(ctx, mockProvider(),
             mock(Offloader.class), mock(ConversationSummarizer.class));
 
         assertNull(coordinator.lastSeenUsage(), "Initial lastSeenUsage should be null");
@@ -247,22 +247,22 @@ class CompressionCoordinatorTest {
     @Test
     void offloaderExceptionReturnsFailedOffload(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
         var offloader = mock(Offloader.class);
         when(offloader.apply(any(), any()))
-            .thenThrow(new CompressionException("disk full"));
+            .thenThrow(new CompactException("disk full"));
 
         var summarizer = mock(ConversationSummarizer.class);
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(), offloader, summarizer);
+        var coordinator = new CompactCoordinator(ctx, mockProvider(), offloader, summarizer);
 
         var session = mockSession(largeMessages());
-        var outcome = coordinator.beforeRequest(session, CompressionTrigger.AUTO, null);
+        var outcome = coordinator.beforeRequest(session, CompactTrigger.AUTO, null);
 
-        assertInstanceOf(CompressionResult.FailedOffload.class, outcome.result());
-        var result = (CompressionResult.FailedOffload) outcome.result();
+        assertInstanceOf(CompactResult.FailedOffload.class, outcome.result());
+        var result = (CompactResult.FailedOffload) outcome.result();
         assertTrue(result.reason().contains("disk full"), "Reason should contain exception message");
         assertNull(outcome.newMessages(), "Failed should have null newMessages");
         assertEquals(0, counter.failures(), "Offload failure should NOT increment counter");
@@ -274,11 +274,11 @@ class CompressionCoordinatorTest {
     @Test
     void resetCounterClearsState(@TempDir Path tmp) throws Exception {
         var cfg = smallCfg();
-        var storage = new CompressionStorage(tmp.resolve("s"));
+        var storage = new CompactStorage(tmp.resolve("s"));
         var counter = new FailureCounter(cfg.failureThreshold());
-        var ctx = new CompressionContext(cfg, storage, counter);
+        var ctx = new CompactContext(cfg, storage, counter);
 
-        var coordinator = new CompressionCoordinator(ctx, mockProvider(),
+        var coordinator = new CompactCoordinator(ctx, mockProvider(),
             mock(Offloader.class), mock(ConversationSummarizer.class));
 
         // Trip the counter

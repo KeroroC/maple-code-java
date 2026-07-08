@@ -3,9 +3,9 @@ package com.maplecode.ui;
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
-import com.maplecode.compression.CompressionCoordinator;
-import com.maplecode.compression.CompressionResult;
-import com.maplecode.compression.CompressionTrigger;
+import com.maplecode.compact.CompactCoordinator;
+import com.maplecode.compact.CompactResult;
+import com.maplecode.compact.CompactTrigger;
 import com.maplecode.config.AppConfig;
 import com.maplecode.permission.PermissionEngine;
 import com.maplecode.permission.PermissionMode;
@@ -33,12 +33,12 @@ public final class ReplLoop {
     private final ChatSession session;
     private final AgentLoop agent;
     private AgentConfig agentConfig;
-    private final CompressionCoordinator coord;  // nullable
+    private final CompactCoordinator coord;  // nullable
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig,
-                    CompressionCoordinator coord) {
+                    CompactCoordinator coord) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -66,7 +66,7 @@ public final class ReplLoop {
     }
 
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/compress 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
+        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
         while (true) {
             String input;
             try {
@@ -95,19 +95,19 @@ public final class ReplLoop {
                 continue;
             }
 
-            // /compress
-            if (trimmed.equals("/compress")) {
+            // /compact
+            if (trimmed.equals("/compact")) {
                 if (coord == null) {
-                    printer.error("compression not enabled");
+                    printer.error("compact not enabled");
                     continue;
                 }
                 var usage = coord.lastSeenUsage();
-                var outcome = coord.beforeRequest(agent.session(), CompressionTrigger.MANUAL, usage);
-                if (outcome.result() instanceof CompressionResult.ChangedOffloadOnly
-                    || outcome.result() instanceof CompressionResult.ChangedFull) {
+                var outcome = coord.beforeRequest(agent.session(), CompactTrigger.MANUAL, usage);
+                if (outcome.result() instanceof CompactResult.ChangedOffloadOnly
+                    || outcome.result() instanceof CompactResult.ChangedFull) {
                     agent.session().replaceAll(outcome.newMessages());
                 }
-                printer.compressionResult(outcome.result());
+                printer.compactResult(outcome.result());
                 continue;
             }
 
