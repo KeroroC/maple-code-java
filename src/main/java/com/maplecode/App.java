@@ -156,7 +156,7 @@ public final class App {
         // 启动期组装 systemBlocks
         DynamicContext env = DynamicContext.capture(cwd);
         var tools = registry.all();
-        var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL, raw.yamlPrompt());
+        var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL, raw.yamlPrompt(), null);
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
         var blocks = new PromptAssembler().assemble(sections, sectionCtx);
 

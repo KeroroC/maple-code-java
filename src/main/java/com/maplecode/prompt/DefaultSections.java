@@ -1,6 +1,7 @@
 package com.maplecode.prompt;
 
 import com.maplecode.agent.PlanMode;
+import com.maplecode.agents.AgentsMdSection;
 import com.maplecode.tool.Tool;
 
 import java.util.ArrayList;
@@ -50,11 +51,14 @@ public final class DefaultSections {
     public static final PromptSection LONG_TERM_MEMORY = new Section("long_term_memory", "", true, false);
 
     public static List<PromptSection> standard(DynamicContext env, List<Tool> tools,
-                                               PlanMode planMode, String customInstruction) {
+                                               PlanMode planMode, String customInstruction,
+                                               String agentsMd) {
         // 当前设计的缓存命中率依赖这里的明确顺序，如果将ENVIRONMENT这样的动态内容放到TEXT_OUTPUT前面会导致缓存命中率几乎为0
         List<PromptSection> list = new ArrayList<>(List.of(
             IDENTITY, SYSTEM_CONSTRAINTS, TASK_MODE, ACTION_EXECUTION,
-            TOOL_USAGE, TONE_STYLE, TEXT_OUTPUT, ENVIRONMENT));
+            TOOL_USAGE, TONE_STYLE, TEXT_OUTPUT,
+            new AgentsMdSection(agentsMd),  // v7.1 新增：在 ENVIRONMENT 之前
+            ENVIRONMENT));
         if (customInstruction != null && !customInstruction.isBlank()) {
             list.add(new CustomInstructionSection(customInstruction));
         }

@@ -25,10 +25,11 @@ class DefaultSectionsTest {
         var sections = DefaultSections.standard(
             new DynamicContext(Path.of("/tmp"), false,
                 "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now()),
-            List.of(), PlanMode.NORMAL, null);
-        assertEquals(8, sections.size(),
-            "应当恰好 8 个固定段：identity/constraints/task/action/tool/tone/text/env");
+            List.of(), PlanMode.NORMAL, null, null);
+        assertEquals(9, sections.size(),
+            "应当恰好 9 个固定段：identity/constraints/task/action/tool/tone/text/agents_md/env");
         for (var s : sections) {
+            if ("agents_md".equals(s.kind())) continue;  // agentsMd=null 时内容为空，属正常
             assertFalse(s.render(ctx(PlanMode.NORMAL)).isBlank(),
                 "section " + s.kind() + " 输出空");
         }
@@ -38,8 +39,8 @@ class DefaultSectionsTest {
     void environmentIsCacheableFalse() {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
-        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null);
-        var envSection = sections.get(7);
+        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null);
+        var envSection = sections.get(8);
         assertEquals("environment", envSection.kind());
         assertFalse(envSection.cacheable(),
             "EnvironmentSection 必须是 cacheable=false");
@@ -49,7 +50,7 @@ class DefaultSectionsTest {
     void taskModeVariesByPlanMode() {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
-        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null);
+        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null);
         var taskMode = sections.get(2);
         assertEquals("task_mode", taskMode.kind());
         assertNotEquals(taskMode.render(ctx(PlanMode.NORMAL)),
@@ -61,11 +62,11 @@ class DefaultSectionsTest {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
         var nullCustom = DefaultSections.standard(env, List.of(),
-            PlanMode.NORMAL, null);
+            PlanMode.NORMAL, null, null);
         var withCustom = DefaultSections.standard(env, List.of(),
-            PlanMode.NORMAL, "做且只做单元测试");
-        assertEquals(8, nullCustom.size());
-        assertEquals(9, withCustom.size());
-        assertEquals("custom_instruction", withCustom.get(8).kind());
+            PlanMode.NORMAL, "做且只做单元测试", null);
+        assertEquals(9, nullCustom.size());
+        assertEquals(10, withCustom.size());
+        assertEquals("custom_instruction", withCustom.get(9).kind());
     }
 }
