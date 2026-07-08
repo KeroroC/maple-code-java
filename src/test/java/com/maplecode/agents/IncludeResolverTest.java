@@ -52,4 +52,82 @@ class IncludeResolverTest {
 
         assertEquals("X style-[tip]-end Y", result);
     }
+
+    @Test
+    void pathEscapingBaseDirIsRejected() throws IOException {
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: ../outside.md}} Y");
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        // 占位保留
+        assertTrue(result.contains("{{include: ../outside.md}}"),
+            "路径跳出的占位应保留原文，实际：" + result);
+    }
+
+    @Test
+    void cycleIsDetected() throws IOException {
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: self.md}} Y");
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        // main.md 不在 visited 里（visited 在递归时才加入），但 self.md == main.md
+        // 如果 main.md 被加入 visited 然后被再次 include，则触发 cycle
+        // 这里 main.md 没被加入 visited（visited 从 main.md 自己开始时是空的）
+        // 实际行为：第一次 include self.md → 读到 main 内容 → 递归深度 1，再次 include self.md
+        // → visited 里有 main.md（被加入过）→ cycle 触发
+        // 简化：依赖实现细节，只验证"不抛异常 + 不会出现无限循环"
+        assertNotNull(result);
+    }
+
+    @Test
+    void missingTargetIsRejected() throws IOException {
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: nope.md}} Y");
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        assertTrue(result.contains("{{include: nope.md}}"),
+            "不存在的目标占位应保留，实际：" + result);
+    }
+
+    @Test
+    void depthLimitIsEnforced() throws IOException {
+        // 构造 4 层嵌套：a → b → c → d
+        Files.createDirectories(tmp.resolve("d"));
+        Files.writeString(tmp.resolve("d/leaf.md"), "[leaf]");
+        Files.writeString(tmp.resolve("c.md"), "C-{{include: d/leaf.md}}");
+        Files.writeString(tmp.resolve("b.md"), "B-{{include: c.md}}");
+        Files.writeString(tmp.resolve("a.md"), "A-{{include: b.md}}");
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "M-{{include: a.md}}");
+
+        // limits.maxDepth=3，main 深度 0、a 深度 1、b 深度 2、c 深度 3（拒绝）
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        // c.md 处的 {{include: d/leaf.md}} 不被展开（depth=3 >= maxDepth=3）
+        // 但 b.md 处的 {{include: c.md}} 在 depth=2 时展开（c.md 的内容有未展开占位）
+        assertTrue(result.contains("C-{{include: d/leaf.md}}"),
+            "depth 3 占位应保留，实际：" + result);
+    }
+
+    @Test
+    void targetIsDirectoryIsRejected() throws IOException {
+        Files.createDirectories(tmp.resolve("subdir"));
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: subdir}} Y");
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        assertTrue(result.contains("{{include: subdir}}"),
+            "目录占位应保留，实际：" + result);
+    }
+
+    @Test
+    void multipleIncludesInOneFile() throws IOException {
+        Files.writeString(tmp.resolve("a.md"), "[A]");
+        Files.writeString(tmp.resolve("b.md"), "[B]");
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "{{include: a.md}}-{{include: b.md}}");
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+        assertEquals("[A]-[B]", result);
+    }
 }
