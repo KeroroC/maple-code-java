@@ -1,5 +1,6 @@
 package com.maplecode.config;
 
+import com.maplecode.memory.MemoryConfig;
 import com.maplecode.permission.PermissionMode;
 import com.maplecode.prompt.SystemBlock;
 import com.maplecode.provider.ThinkingConfig;
@@ -20,7 +21,8 @@ public record AppConfig(
     AgentLimits agentLimits,
     McpConfig mcpConfig,                // nullable；null 表示未配置 mcp_servers 块
     int contextWindow,                  // 0 = 未配置
-    String summarizerModel              // null = 未配置
+    String summarizerModel,             // null = 未配置
+    MemoryConfig memoryConfig           // nullable；null 表示未配置 memory 块
 ) {
 
     public AppConfig {

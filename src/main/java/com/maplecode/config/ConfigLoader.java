@@ -1,6 +1,7 @@
 package com.maplecode.config;
 
 import com.maplecode.error.ConfigException;
+import com.maplecode.memory.MemoryConfig;
 import com.maplecode.permission.PermissionMode;
 import com.maplecode.provider.ThinkingConfig;
 import org.yaml.snakeyaml.Yaml;
@@ -69,11 +70,12 @@ public final class ConfigLoader {
 
         int contextWindow = root.get("context_window") instanceof Number nw ? nw.intValue() : 0;
         String summarizerModel = optionalString(root, "summarizer_model");
+        MemoryConfig memoryConfig = parseMemoryConfig(optionalMap(root, "memory"));
 
         return new AppConfig(protocol, model, baseUrl, apiKey, yamlPrompt,
             List.of(), thinking, new AppConfig.Timeouts(connect, read), mode,
             new AppConfig.AgentLimits(maxIter, maxUnknown), mcp,
-            contextWindow, summarizerModel);
+            contextWindow, summarizerModel, memoryConfig);
     }
 
     private static ThinkingConfig parseThinking(Map<?, ?> m) {
@@ -120,6 +122,15 @@ public final class ConfigLoader {
         int timeout = m.get("startup_timeout_ms") instanceof Number n
             ? n.intValue() : AppConfig.McpConfig.DEFAULT_STARTUP_TIMEOUT_MS;
         return new AppConfig.McpConfig(enabled, timeout);
+    }
+
+    private static MemoryConfig parseMemoryConfig(Map<?, ?> m) {
+        if (m == null) return null;
+        boolean enabled = isEnabled(m.get("enabled"));
+        String model = optionalString(m, "memory_model");
+        int maxCtx = m.get("max_context_messages") instanceof Number n
+            ? n.intValue() : MemoryConfig.DEFAULT_MAX_CONTEXT_MESSAGES;
+        return new MemoryConfig(enabled, model, maxCtx);
     }
 
     /** 判断 YAML enabled 字段是否为真值（null 视为 true；"false"/"no"/"off"/"0" 大小写不敏感视为 false）。 */
