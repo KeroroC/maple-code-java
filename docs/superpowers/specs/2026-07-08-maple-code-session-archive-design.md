@@ -17,10 +17,10 @@
 每个 session 对应一个 JSONL 文件。每行一条 JSON 记录，对应一条 `ChatMessage`：
 
 ```json
-{"role":"user","content":[{"type":"text","text":"你好"}],"ts":"2026-07-08T14:30:22+08:00"}
-{"role":"assistant","content":[{"type":"text","text":"你好！有什么可以帮你的？"}],"ts":"2026-07-08T14:30:25+08:00"}
-{"role":"assistant","content":[{"type":"text","text":"我来读取文件"},{"type":"tool_use","id":"tu_1","name":"read_file","input":{"path":"a.java"}}],"ts":"2026-07-08T14:30:28+08:00"}
-{"role":"user","content":[{"type":"tool_result","toolUseId":"tu_1","content":"文件内容...","isError":false}],"ts":"2026-07-08T14:30:30+08:00"}
+{"role":"user","content":[{"type":"text","text":"你好"}]}
+{"role":"assistant","content":[{"type":"text","text":"你好！有什么可以帮你的？"}]}
+{"role":"assistant","content":[{"type":"text","text":"我来读取文件"},{"type":"tool_use","id":"tu_1","name":"read_file","input":{"path":"a.java"}}]}
+{"role":"user","content":[{"type":"tool_result","toolUseId":"tu_1","content":"文件内容...","isError":false}]}
 ```
 
 ### 2.1 字段说明
@@ -29,7 +29,8 @@
 |------|------|------|
 | `role` | string | `"user"` 或 `"assistant"` |
 | `content` | array | ContentBlock JSON 数组 |
-| `ts` | string | ISO-8601 带时区时间戳 |
+
+不存储每条消息的时间戳——批量写入时无法还原真实时间间隔。`SessionMeta.lastActivity` 从文件 mtime 获取。
 
 ### 2.2 ContentBlock 序列化
 
@@ -39,9 +40,9 @@
 - **ToolUseBlock**: `{"type":"tool_use","id":"...","name":"...","input":{...}}`
 - **ToolResultBlock**: `{"type":"tool_result","toolUseId":"...","content":"...","isError":false}`
 
-### 2.3 时间戳
+### 2.3 时间信息
 
-`ts` 为该消息写入存档时的当前时间（`Instant.now()`）。读取时不回填到 `ChatMessage`（`ChatMessage` 无 ts 字段），仅用于 `/resume` 列表展示。
+不存储每条消息的时间戳。`SessionMeta.lastActivity` 从文件 mtime（`Files.getLastModifiedTime()`）获取，用于 `/resume` 列表的相对时间展示（如 "2h ago"）。
 
 ## 3. 包结构
 
@@ -78,12 +79,12 @@ public final class SessionArchive {
     public List<ChatMessage> load(String idOrPrefix);
 
     /**
-     * 列出最近 N 个 session 元信息，按 lastActivity 倒序。
+     * 列出最近 N 个 session 元信息，按文件 mtime 倒序。
      */
     public List<SessionMeta> listRecent(int limit);
 
     /**
-     * 删除超过 maxAge 的文件，返回删除数量。
+     * 删除 mtime 超过 maxAge 的文件，返回删除数量。
      * 启动时调用一次即可。
      */
     public int cleanExpired(Duration maxAge);
@@ -107,7 +108,7 @@ final class SessionWriter {
 
 序列化逻辑：
 1. 遍历 `ChatSession` 的每条 `ChatMessage`
-2. 构造 JSON 对象：`role` → `role().name().toLowerCase()`，`content` → 递归序列化 blocks，`ts` → `Instant.now().toString()`
+2. 构造 JSON 对象：`role` → `role().name().toLowerCase()`，`content` → 递归序列化 blocks
 3. `ObjectMapper.writeValueAsString()` → 单行 JSON
 4. `BufferedWriter` 写入，每行 `\n` 结尾
 
@@ -144,7 +145,7 @@ final class SessionReader {
 public record SessionMeta(
     String id,           // session ID（不含 .jsonl）
     int messageCount,    // 消息总数
-    Instant lastActivity // 最后一条消息的时间戳
+    Instant lastActivity // 文件 mtime，用于 /resume 列表展示
 ) {}
 ```
 
@@ -197,7 +198,7 @@ Restored 12 messages from archive.
 逻辑：
 1. 调 `sessionArchive.listRecent(10)`
 2. 如果为空，打印 `printer.info("(no archived sessions)")`
-3. 格式化列表，用相对时间（2h ago / 5m ago / 1d ago）
+3. 格式化列表，用相对时间（基于文件 mtime：2h ago / 5m ago / 1d ago）
 4. `reader.readLine("Select [1-N]: ")` 读取用户选择
 5. 解析序号：非数字或超出范围 → `printer.error("invalid selection")` 并返回
 6. 获取对应 SessionMeta
@@ -275,7 +276,7 @@ if (cleaned > 0) {
 ### 8.3 SessionArchiveTest
 
 - save → load roundtrip（@TempDir）
-- listRecent 排序正确（按文件名时间倒序）
+- listRecent 排序正确（按文件 mtime 倒序）
 - cleanExpired 删除过期文件
 - load 前缀匹配
 - save 空 session 返回 null
