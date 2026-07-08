@@ -20,6 +20,7 @@ public final class MemoryFailureCounter {
 
     public void recordSuccess() {
         failures.set(0);
+        tripped.set(false);
     }
 
     /** true = 熔断器关闭（正常工作），false = 熔断器打开（跳过提取）。 */

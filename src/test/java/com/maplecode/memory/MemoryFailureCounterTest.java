@@ -31,4 +31,15 @@ class MemoryFailureCounterTest {
         assertTrue(c.isOpen());
         assertEquals(0, c.failures());
     }
+
+    @Test
+    void successAfterTripResetsBreaker() {
+        var c = new MemoryFailureCounter();
+        c.recordFailure();
+        c.recordFailure();
+        c.recordFailure();
+        assertFalse(c.isOpen());
+        c.recordSuccess();
+        assertTrue(c.isOpen());
+    }
 }

@@ -32,6 +32,9 @@ public final class MemoryExtractor {
         and extract important facts, preferences, or references that should be
         remembered for future sessions.
 
+        当前已有记忆：
+        {existing_memory_list}
+
         CATEGORIES:
         - user: Personal preferences, habits, or settings of the user (e.g., preferred language, coding style)
         - feedback: Corrections or feedback the user gave about your behavior (e.g., "don't use emojis")
@@ -60,10 +63,12 @@ public final class MemoryExtractor {
 
     private final LlmProvider provider;
     private final String model;
+    private final List<MemoryEntry> existingMemories;
 
-    public MemoryExtractor(LlmProvider provider, String model) {
+    public MemoryExtractor(LlmProvider provider, String model, List<MemoryEntry> existingMemories) {
         this.provider = provider;
         this.model = model;
+        this.existingMemories = existingMemories;
     }
 
     /**
@@ -125,12 +130,26 @@ public final class MemoryExtractor {
 
     // --- 内部方法 ---
 
+    private String formatExistingMemories() {
+        if (existingMemories.isEmpty()) {
+            return "(none)";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (MemoryEntry entry : existingMemories) {
+            sb.append("- ").append(entry.name()).append(" (").append(entry.category().dirName()).append("): ").append(entry.summary()).append("\n");
+        }
+        return sb.toString().stripTrailing();
+    }
+
     private String callLlm(String formattedMessages) {
         StringBuilder sb = new StringBuilder();
 
+        String memoryList = formatExistingMemories();
+        String systemPrompt = EXTRACTION_SYSTEM_PROMPT.replace("{existing_memory_list}", memoryList);
+
         ChatRequest request = new ChatRequest(
             model,
-            List.of(new SystemBlock(EXTRACTION_SYSTEM_PROMPT, false, "memory-extractor")),
+            List.of(new SystemBlock(systemPrompt, false, "memory-extractor")),
             List.of(new ChatMessage(ChatMessage.Role.USER, List.of(new TextBlock(formattedMessages)))),
             null,   // 不启用 thinking
             null    // 不使用工具

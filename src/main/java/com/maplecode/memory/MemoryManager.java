@@ -4,6 +4,7 @@ import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.LlmProvider;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,7 +54,9 @@ public final class MemoryManager implements Closeable {
     private void doExtract(List<ChatMessage> recentMessages) {
         try {
             String model = config.memoryModel() != null ? config.memoryModel() : mainModel;
-            var extractor = new MemoryExtractor(provider, model);
+            List<MemoryEntry> allEntries = new ArrayList<>(store.loadIndex(MemoryScope.USER));
+            allEntries.addAll(store.loadIndex(MemoryScope.PROJECT));
+            var extractor = new MemoryExtractor(provider, model, allEntries);
             MemoryOpsResult result = extractor.extract(recentMessages);
 
             for (MemoryOp op : result.ops()) {
