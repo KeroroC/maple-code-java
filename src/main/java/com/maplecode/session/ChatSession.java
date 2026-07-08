@@ -35,6 +35,11 @@ public final class ChatSession {
         messages.add(new ChatMessage(Role.ASSISTANT, List.copyOf(blocks)));
     }
 
+    /** 便利方法：助手回复纯文本。 */
+    public void appendAssistantText(String text) {
+        appendAssistant(List.of(new ContentBlock.TextBlock(text)));
+    }
+
     public int size() {
         return messages.size();
     }
