@@ -23,7 +23,7 @@ class PromptAssemblerAgentsTest {
     void cacheBoundaryFallsAfterAgentsMdOrAtCustomInstructionTail() {
         // 不带 customInstruction：cacheBoundary 应在 agents_md 段（最后一个 cacheable 段）
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "rules");
+            PlanMode.NORMAL, null, "rules", null);
         var blocks = new PromptAssembler().assemble(sections,
             new SectionContext(List.of(), env(), PlanMode.NORMAL));
 
@@ -36,15 +36,18 @@ class PromptAssemblerAgentsTest {
             }
         }
         assertTrue(boundaryIdx >= 0, "至少应有一个 cacheBoundary=true 的 block");
-        assertEquals("agents_md", blocks.get(boundaryIdx).kind(),
-            "无 customInstruction 时 cacheBoundary 应落在 agents_md 末尾");
+        // 无 memoryContent 时，long_term_memory 的 enabled()=false，不注入；
+        // 最后一个 cacheable 段是 agents_md（或 long_term_memory 若有内容）
+        String boundaryKind = blocks.get(boundaryIdx).kind();
+        assertTrue("agents_md".equals(boundaryKind) || "long_term_memory".equals(boundaryKind),
+            "无 customInstruction 时 cacheBoundary 应落在 agents_md 或 long_term_memory 末尾，实际: " + boundaryKind);
     }
 
     @Test
     void cacheBoundaryFallsAtCustomInstructionWhenPresent() {
         // 带 customInstruction：cacheBoundary 应在 custom_instruction（更后的 cacheable）
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, "做且只做单元测试", "rules");
+            PlanMode.NORMAL, "做且只做单元测试", "rules", null);
         var blocks = new PromptAssembler().assemble(sections,
             new SectionContext(List.of(), env(), PlanMode.NORMAL));
 

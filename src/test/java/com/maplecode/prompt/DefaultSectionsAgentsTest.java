@@ -22,7 +22,7 @@ class DefaultSectionsAgentsTest {
     @Test
     void agentsMdSectionIsBetweenTextOutputAndEnvironment() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "rules");
+            PlanMode.NORMAL, null, "rules", null);
 
         // 找到 agents_md 段
         var agentsMd = sections.stream()
@@ -32,23 +32,23 @@ class DefaultSectionsAgentsTest {
 
         int agentsMdIdx = sections.indexOf(agentsMd);
         int textOutputIdx = -1;
-        int envIdx = -1;
+        int memoryIdx = -1;
         for (int i = 0; i < sections.size(); i++) {
             if ("text_output".equals(sections.get(i).kind())) textOutputIdx = i;
-            if ("environment".equals(sections.get(i).kind())) envIdx = i;
+            if ("long_term_memory".equals(sections.get(i).kind())) memoryIdx = i;
         }
         assertTrue(textOutputIdx >= 0, "text_output 段缺失");
-        assertTrue(envIdx >= 0, "environment 段缺失");
+        assertTrue(memoryIdx >= 0, "long_term_memory 段缺失");
         assertEquals(textOutputIdx + 1, agentsMdIdx,
             "AgentsMdSection 应紧跟 text_output 之后");
-        assertEquals(envIdx, agentsMdIdx + 1,
-            "AgentsMdSection 应紧接 environment 之前");
+        assertEquals(agentsMdIdx + 1, memoryIdx,
+            "MemorySection 应紧跟 agents_md 之后");
     }
 
     @Test
     void emptyAgentsMdStillProducesSection() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, null);
+            PlanMode.NORMAL, null, null, null);
         var agentsMd = sections.stream()
             .filter(s -> "agents_md".equals(s.kind()))
             .findFirst()
@@ -60,7 +60,7 @@ class DefaultSectionsAgentsTest {
     @Test
     void nonEmptyAgentsMdRendersContent() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "Use Java 21.\nAvoid global state.");
+            PlanMode.NORMAL, null, "Use Java 21.\nAvoid global state.", null);
         var agentsMd = sections.stream()
             .filter(s -> "agents_md".equals(s.kind()))
             .findFirst()

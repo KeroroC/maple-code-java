@@ -47,17 +47,15 @@ public final class DefaultSections {
     /** v5 占位：已激活 Skill 段。本期 enabled()=false，不挂进 standard()。 */
     public static final PromptSection ACTIVATED_SKILLS = new Section("activated_skills", "", true, false);
 
-    /** v5 占位：长期记忆段。本期 enabled()=false，不挂进 standard()。 */
-    public static final PromptSection LONG_TERM_MEMORY = new Section("long_term_memory", "", true, false);
-
     public static List<PromptSection> standard(DynamicContext env, List<Tool> tools,
                                                PlanMode planMode, String customInstruction,
-                                               String agentsMd) {
+                                               String agentsMd, String memoryContent) {
         // 当前设计的缓存命中率依赖这里的明确顺序，如果将ENVIRONMENT这样的动态内容放到TEXT_OUTPUT前面会导致缓存命中率几乎为0
         List<PromptSection> list = new ArrayList<>(List.of(
             IDENTITY, SYSTEM_CONSTRAINTS, TASK_MODE, ACTION_EXECUTION,
             TOOL_USAGE, TONE_STYLE, TEXT_OUTPUT,
-            new AgentsMdSection(agentsMd),  // v7.1 新增：在 ENVIRONMENT 之前
+            new AgentsMdSection(agentsMd),
+            new MemorySection(memoryContent),   // v7.3 新增
             ENVIRONMENT));
         if (customInstruction != null && !customInstruction.isBlank()) {
             list.add(new CustomInstructionSection(customInstruction));

@@ -21,6 +21,8 @@ import com.maplecode.permission.RuleCheck;
 import com.maplecode.permission.RuleSet;
 import com.maplecode.permission.SandboxCheck;
 import com.maplecode.agents.AgentsMdLoader;
+import com.maplecode.memory.MemoryScope;
+import com.maplecode.memory.MemoryStore;
 import com.maplecode.prompt.DefaultSections;
 import com.maplecode.session.archive.SessionArchive;
 import com.maplecode.prompt.DynamicContext;
@@ -171,8 +173,13 @@ public final class App {
         String agentsMd = AgentsMdLoader.load(
             cwd,
             Paths.get(System.getProperty("user.home")));
+        // v7.3 长期记忆
+        MemoryStore memoryStore = new MemoryStore();
+        String userMemory = memoryStore.loadIndexText(MemoryScope.USER);
+        String projectMemory = memoryStore.loadIndexText(MemoryScope.PROJECT);
+        String memoryContent = combineMemorySections(userMemory, projectMemory);
         var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL,
-            raw.yamlPrompt(), agentsMd);
+            raw.yamlPrompt(), agentsMd, memoryContent);
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
         var blocks = new PromptAssembler().assemble(sections, sectionCtx);
 
@@ -188,6 +195,17 @@ public final class App {
         org.jline.terminal.Terminal terminal =
             org.jline.terminal.TerminalBuilder.builder().system(true).build();
         return org.jline.reader.LineReaderBuilder.builder().terminal(terminal).build();
+    }
+
+    private static String combineMemorySections(String user, String project) {
+        boolean hasUser = user != null && !user.isBlank();
+        boolean hasProject = project != null && !project.isBlank();
+        if (!hasUser && !hasProject) return "";
+        StringBuilder sb = new StringBuilder();
+        if (hasUser) sb.append(user);
+        if (hasUser && hasProject) sb.append("\n\n");
+        if (hasProject) sb.append(project);
+        return sb.toString();
     }
 
     private static Path locateConfig(String[] args) {
