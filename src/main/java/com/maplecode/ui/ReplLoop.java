@@ -154,6 +154,7 @@ public final class ReplLoop {
                     try {
                         var loaded = sessionArchive.load(chosen.id());
                         agent.session().clear();
+                        if (coord != null) coord.resetCounter();
                         agent.session().replaceAll(loaded);
                         printer.info("Restored " + loaded.size() + " messages from archive.");
                     } catch (Exception e) {
@@ -163,6 +164,7 @@ public final class ReplLoop {
                     try {
                         var loaded = sessionArchive.load(arg);
                         agent.session().clear();
+                        if (coord != null) coord.resetCounter();
                         agent.session().replaceAll(loaded);
                         printer.info("Restored " + loaded.size() + " messages from archive.");
                     } catch (Exception e) {
