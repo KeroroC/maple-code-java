@@ -52,8 +52,8 @@ public final class SessionArchive {
     }
 
     public List<SessionMeta> listRecent(int limit) {
-        try {
-            return Files.list(sessionsDir)
+        try (var stream = Files.list(sessionsDir)) {
+            return stream
                 .filter(p -> p.toString().endsWith(".jsonl"))
                 .sorted(Comparator.comparing((Path p) -> {
                     try { return Files.getLastModifiedTime(p).toInstant(); }
@@ -81,8 +81,8 @@ public final class SessionArchive {
     public int cleanExpired(Duration maxAge) {
         Instant cutoff = Instant.now().minus(maxAge);
         int count = 0;
-        try {
-            var files = Files.list(sessionsDir)
+        try (var stream = Files.list(sessionsDir)) {
+            var files = stream
                 .filter(p -> p.toString().endsWith(".jsonl"))
                 .toList();
             for (Path f : files) {
@@ -103,8 +103,8 @@ public final class SessionArchive {
     private Path resolveFile(String idOrPrefix) {
         Path exact = sessionsDir.resolve(idOrPrefix + ".jsonl");
         if (Files.exists(exact)) return exact;
-        try {
-            return Files.list(sessionsDir)
+        try (var stream = Files.list(sessionsDir)) {
+            return stream
                 .filter(p -> {
                     String name = p.getFileName().toString();
                     return name.endsWith(".jsonl") && name.startsWith(idOrPrefix);
