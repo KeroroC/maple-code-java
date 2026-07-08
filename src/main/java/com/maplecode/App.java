@@ -22,6 +22,7 @@ import com.maplecode.permission.RuleSet;
 import com.maplecode.permission.SandboxCheck;
 import com.maplecode.agents.AgentsMdLoader;
 import com.maplecode.prompt.DefaultSections;
+import com.maplecode.session.archive.SessionArchive;
 import com.maplecode.prompt.DynamicContext;
 import com.maplecode.prompt.PromptAssembler;
 import com.maplecode.prompt.SectionContext;
@@ -42,6 +43,7 @@ import com.maplecode.ui.StreamPrinter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -143,6 +145,14 @@ public final class App {
         CompactCoordinator coord = new CompactCoordinator(
             compactCtx, provider, offloader, summarizer);
 
+        // 会话存档（v7.2）
+        Path sessionsDir = Paths.get(System.getProperty("user.home"), ".maplecode", "sessions");
+        SessionArchive sessionArchive = new SessionArchive(sessionsDir);
+        int cleaned = sessionArchive.cleanExpired(Duration.ofDays(30));
+        if (cleaned > 0) {
+            System.err.println("[session] cleaned " + cleaned + " expired archives");
+        }
+
         ToolExecutor executor = new ToolExecutor(registry, engine);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -170,7 +180,7 @@ public final class App {
             .withSystemBlocks(blocks);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
-            reader, registry, executor, engine, agentConfig, null, coord);
+            reader, registry, executor, engine, agentConfig, sessionArchive, coord);
         repl.run();
     }
 
