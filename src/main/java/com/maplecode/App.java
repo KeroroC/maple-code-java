@@ -170,7 +170,7 @@ public final class App {
             .withSystemBlocks(blocks);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
-            reader, registry, executor, engine, agentConfig, coord);
+            reader, registry, executor, engine, agentConfig, null, coord);
         repl.run();
     }
 

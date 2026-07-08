@@ -13,6 +13,7 @@ import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.session.ChatSession;
+import com.maplecode.session.archive.SessionArchive;
 import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
 import org.jline.reader.LineReader;
@@ -33,12 +34,13 @@ public final class ReplLoop {
     private final ChatSession session;
     private final AgentLoop agent;
     private AgentConfig agentConfig;
+    private final SessionArchive sessionArchive;  // nullable
     private final CompactCoordinator coord;  // nullable
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig,
-                    CompactCoordinator coord) {
+                    SessionArchive sessionArchive, CompactCoordinator coord) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -48,16 +50,17 @@ public final class ReplLoop {
         this.engine = engine;
         this.session = new ChatSession();
         this.agentConfig = agentConfig;
+        this.sessionArchive = sessionArchive;
         this.coord = coord;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
                 printer::usage, coord);
     }
 
-    /** 8 参数向后兼容构造器（coord=null）。 */
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
-        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null);
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -66,7 +69,7 @@ public final class ReplLoop {
     }
 
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
+        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/new 新会话，/resume 恢复会话，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，\"\"\" 开始多行输入");
         while (true) {
             String input;
             try {
@@ -92,6 +95,80 @@ public final class ReplLoop {
                 agent.session().clear();
                 if (coord != null) coord.resetCounter();
                 printer.info("history cleared");
+                continue;
+            }
+
+            // /new
+            if (trimmed.equals("/new")) {
+                if (sessionArchive != null) {
+                    String archived = sessionArchive.save(agent.session());
+                    if (archived != null) {
+                        printer.info("Archived current session (" + agent.session().size() + " messages).");
+                    }
+                }
+                agent.session().clear();
+                if (coord != null) coord.resetCounter();
+                printer.info("New session started.");
+                continue;
+            }
+
+            // /resume
+            if (trimmed.equals("/resume") || trimmed.startsWith("/resume ")) {
+                if (sessionArchive == null) {
+                    printer.error("session archive not available");
+                    continue;
+                }
+                String arg = trimmed.length() > 8 ? trimmed.substring(8).trim() : "";
+                if (arg.isEmpty()) {
+                    var recent = sessionArchive.listRecent(10);
+                    if (recent.isEmpty()) {
+                        printer.info("(no archived sessions)");
+                        continue;
+                    }
+                    printer.info("Recent sessions:");
+                    for (int i = 0; i < recent.size(); i++) {
+                        var meta = recent.get(i);
+                        String relTime = formatRelativeTime(meta.lastActivity());
+                        printer.info("  [" + (i + 1) + "] " + meta.id()
+                            + " (" + meta.messageCount() + " messages, " + relTime + ")");
+                    }
+                    String selection;
+                    try {
+                        selection = reader.readLine("Select [1-" + recent.size() + "]: ");
+                    } catch (Exception e) {
+                        continue;
+                    }
+                    if (selection == null) continue;
+                    int idx;
+                    try {
+                        idx = Integer.parseInt(selection.trim());
+                    } catch (NumberFormatException e) {
+                        printer.error("invalid selection");
+                        continue;
+                    }
+                    if (idx < 1 || idx > recent.size()) {
+                        printer.error("invalid selection");
+                        continue;
+                    }
+                    var chosen = recent.get(idx - 1);
+                    try {
+                        var loaded = sessionArchive.load(chosen.id());
+                        agent.session().clear();
+                        agent.session().replaceAll(loaded);
+                        printer.info("Restored " + loaded.size() + " messages from archive.");
+                    } catch (Exception e) {
+                        printer.error("failed to load session: " + e.getMessage());
+                    }
+                } else {
+                    try {
+                        var loaded = sessionArchive.load(arg);
+                        agent.session().clear();
+                        agent.session().replaceAll(loaded);
+                        printer.info("Restored " + loaded.size() + " messages from archive.");
+                    } catch (Exception e) {
+                        printer.error("failed to load session: " + e.getMessage());
+                    }
+                }
                 continue;
             }
 
@@ -180,6 +257,14 @@ public final class ReplLoop {
             agent.run(trimmed, printer);
             printer.newline();
         }
+
+        // 退出前自动存档
+        if (sessionArchive != null) {
+            String archived = sessionArchive.save(session);
+            if (archived != null) {
+                printer.info("Session archived: " + archived);
+            }
+        }
     }
 
     private String lastAssistantText() {
@@ -242,5 +327,17 @@ public final class ReplLoop {
         String result = sb.toString();
         if (result.endsWith("\n")) result = result.substring(0, result.length() - 1);
         return result;
+    }
+
+    private String formatRelativeTime(java.time.Instant instant) {
+        java.time.Duration d = java.time.Duration.between(instant, java.time.Instant.now());
+        long seconds = d.getSeconds();
+        if (seconds < 60) return seconds + "s ago";
+        long minutes = seconds / 60;
+        if (minutes < 60) return minutes + "m ago";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "h ago";
+        long days = hours / 24;
+        return days + "d ago";
     }
 }
