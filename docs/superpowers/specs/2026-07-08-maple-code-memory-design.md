@@ -203,8 +203,14 @@ class MemoryExtractor {
 2. 构造 user prompt（最近 N 条消息的文本摘要）
 3. 调 `provider.stream(req, collector)` 收集完整响应
 4. 从响应文本中提取 JSON 块
-5. 解析为 `List<MemoryOp>`
-6. 返回 `MemoryOpsResult(ops)`
+5. **容错预处理**：剥离 markdown 代码块标记（```json ... ``` 或 ``` ... ```），提取纯 JSON
+6. 解析为 `List<MemoryOp>`
+7. 返回 `MemoryOpsResult(ops)`
+
+**JSON 解析容错**：LLM 即使被要求输出纯 JSON，仍高概率带上 markdown 代码块标记。`extract()` 必须先做以下预处理再解析：
+- 正则 `^```(?:json)?\s*\n?` 和 `\n?```\s*$` 剥离首尾代码块标记
+- `trim()` 后再交给 JSON 解析器
+- 如果仍解析失败，尝试从响应文本中用 `\{[\s\S]*\}` 贪婪匹配 JSON 对象
 
 ### 4.8 MemoryStore
 
@@ -253,7 +259,7 @@ class MemoryManager implements Closeable {
     MemoryManager(MemoryConfig config, LlmProvider provider)
 
     // 异步触发记忆提取（ReplLoop 调用）
-    // 内部用 CompletableFuture.supplyAsync + ForkJoinPool.commonPool()
+    // 内部用专用单线程 ExecutorService 排队执行，保证串行
     void extractAsync(List<ChatMessage> recentMessages)
 
     // 同步触发（/memory extract 命令）
@@ -265,10 +271,12 @@ class MemoryManager implements Closeable {
     // 清空所有记忆
     void clearAll()
 
-    // 关闭（目前无资源需要释放，预留接口）
+    // 关闭：shutdown executor
     void close()
 }
 ```
+
+**并发安全**：`MemoryManager` 内部使用 `Executors.newSingleThreadExecutor()` 而非 `ForkJoinPool.commonPool()`。所有 `extractAsync` 调用提交到这个单线程队列，保证文件 I/O 串行执行，避免并发读写 MEMORY.md 和序号文件导致索引损坏或文件覆盖。`close()` 负责 `executor.shutdownNow()`。
 
 失败处理：
 - 连续 3 次失败后跳过后续调用（在 `com.maplecode.memory` 包内新建 `MemoryFailureCounter`，逻辑与 `compact.FailureCounter` 相同但独立实现，避免跨包依赖）
@@ -448,7 +456,7 @@ memory:
 |---|---|
 | `MemoryConfigTest` | 配置解析、默认值、fromAppConfig |
 | `MemoryCategoryTest` | 枚举映射、scope 归属 |
-| `MemoryExtractorTest` | JSON 解析、边界情况（空 ops、无效 action、缺少字段） |
+| `MemoryExtractorTest` | JSON 解析、边界情况（空 ops、无效 action、缺少字段）、markdown 代码块剥离容错 |
 | `MemoryStoreTest` | 文件读写、索引重建、clearAll、文件命名、边界（损坏文件） |
 | `MemoryManagerTest` | 异步调用、失败熔断、listMemories 格式化 |
 | `MemoryFailureCounterTest` | 计数、熔断、重置 |
