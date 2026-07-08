@@ -68,3 +68,12 @@ mcp_servers:
 # 推荐 claude-haiku-4-5：便宜、快，5 段结构化摘要任务足够
 # 配错 model 名会在第一次 /compress 或自动压缩时由 provider 返回 HTTP 4xx
 # summarizer_model: claude-haiku-4-5
+
+# ===== v7.3 自动长期记忆 =====
+
+# 每轮 Agent Loop 结束后异步调 LLM 分析对话，自动新增/修改/删除长期记忆。
+# 记忆在下次启动时注入系统提示词，实现跨会话知识积累。
+# memory:
+#   enabled: true
+#   memory_model: claude-haiku-4-5    # 记忆提取用模型（可选，默认复用主模型）
+#   max_context_messages: 10          # 提取时看最近几条消息（默认 10）
