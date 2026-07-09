@@ -114,9 +114,8 @@ public final class CompactCoordinator {
         try {
             List<ChatMessage> summarized = summarizer.apply(offloaded, cfg);
             ctx.counter().recordSuccess();
-            int summaryInputTokens = estimator.estimate(offloaded, anchor);
             return new CompactOutcome(
-                new CompactResult.ChangedFull(0, summaryInputTokens),
+                new CompactResult.ChangedFull(0, afterOffload),
                 summarized);
         } catch (CompactException e) {
             ctx.counter().recordFailure();
