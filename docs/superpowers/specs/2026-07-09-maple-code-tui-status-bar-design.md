@@ -7,7 +7,7 @@
 ## 2. 目标
 
 - 底部固定状态栏，显示模型名称、Token 用量、当前模式、工作目录
-- 输入区带上边框（`╭─ > `），视觉上与输出区分离
+- 输入区简洁 prompt（`>`），视觉上与输出区分离
 - 状态栏在 REPL 整个生命周期内保持开启，Agent 输出在 scroll region 上方滚动
 - StreamPrinter 通过 `terminal.writer()` 输出，与 Status 共享 JLine 内部同步机制
 - 不新增外部依赖（仅用 jline-terminal 已有的 Status 类）
@@ -34,7 +34,7 @@
 │ ⚙ read_file /tmp/test.txt                            │
 │ ✓ read_file                                          │
 │                                                      │
-│ ╭─ > _                                               │  ← 输入框（上边框 + prompt）
+│ > _                                                  │  ← 输入框（prompt）
 │ ───────────────────────────────────────────────────  │  ← 状态栏（JLine Status，始终可见）
 │ claude-sonnet-4 │ tok:1.2k/3.4k │ plan │ ~/proj     │
 └──────────────────────────────────────────────────────┘
@@ -59,30 +59,25 @@
 
 ### 4.2 输入框
 
-使用 Unicode box-drawing 字符，只有上边框，没有下边框：
+简洁 prompt，无额外边框装饰：
 
 **单行模式：**
 ```
-╭─ > 用户输入的文本
+> 用户输入的文本
 ```
 
 **多行模式（`"""` 触发）：**
 ```
-╭─ > """
-│ 第一行
-│ 第二行
-│ 第三行
+> """
+... 第一行
+... 第二行
+... 第三行
 ```
 
-**为什么没有下边框：**
-- 多行模式下，每输入一行都需要在末尾重绘下边框，而 JLine 的 readLine 不返回中间状态
-- JLine 历史回溯时，硬编码的下边框会导致行数错乱
-- 输出区的 Agent 输出自然形成视觉分隔，不需要闭合边框
-
 **实现细节：**
-- 首行 prompt：`"╭─ > "` — 直接传入 `readLine()`，JLine 处理光标和编辑
-- 续行 prompt：`"│ "` — 多行模式下使用
-- 无下边框 — `readLine()` 返回后直接进入 Agent 执行
+- 首行 prompt：`"> "` — 直接传入 `readLine()`，JLine 处理光标和编辑
+- 续行 prompt：`"... "` — 多行模式下使用
+- `readLine()` 返回后直接进入 Agent 执行
 
 ### 4.3 交互流程
 
@@ -93,7 +88,7 @@
   打印 banner
 
 每轮循环:
-  1. readLine("╭─ > ")               // 用户输入（状态栏始终在底部可见）
+  1. readLine("> ")                    // 用户输入（状态栏始终在底部可见）
   2. agent.run(input, sink)           // Agent 执行，输出在 scroll region 上方滚动
   3. 更新 status 内容                 // token 用量、模式等
   4. 回到 1
@@ -120,12 +115,12 @@
 
 ```java
 private String readMultiline() {
-    String first = reader.readLine("╭─ > ");
+    String first = reader.readLine("> ");
     if (first == null) return null;
     if (!first.equals("\"\"\"")) return first;  // 非多行，直接返回
     StringBuilder sb = new StringBuilder();
     while (true) {
-        String line = reader.readLine("│ ");     // 续行 prompt
+        String line = reader.readLine("... ");     // 续行 prompt
         if (line == null) return null;
         if (line.equals("\"\"\"")) break;        // 关闭多行
         sb.append(line).append('\n');
@@ -248,8 +243,8 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
    - 每轮循环：输入 → Agent → 更新状态（无 hide/show）
    - 注册 SIGWINCH handler
 4. **`readMultiline()` 方法**：
-   - 首行 prompt 改为 `"╭─ > "`
-   - 多行续行 prompt 改为 `"│ "`
+   - 首行 prompt 改为 `"> "`
+   - 多行续行 prompt 改为 `"... "`
    - 移除 `╰──` 下边框
 5. **状态更新**：
    - Token 用量：从 `usageSink` 捕获
@@ -349,7 +344,7 @@ terminal.handle(Terminal.Signal.WINCH, sig -> {
 
 - **`ReplLoopTest`**（集成级）：
   - mock StatusBar → 验证 `update()` 调用时机（不在 Agent 期间调用 hide/show）
-  - 验证输入框 prompt 内容（`╭─ > ` / `│ `）
+  - 验证输入框 prompt 内容（`>` / `...`）
 
 ### 8.2 手工测试
 
@@ -376,7 +371,7 @@ terminal.handle(Terminal.Signal.WINCH, sig -> {
 
 ### Phase 3：ReplLoop 集成
 - 修改 `ReplLoop` 构造器，添加 `StatusBar` 参数
-- 修改 `readMultiline()`：prompt 改为 `╭─ > ` / `│ `
+- 修改 `readMultiline()`：prompt 改为 `> ` / `... `
 - 修改 `run()` 循环：去掉 hide/show，状态栏始终可见
 - 注册 SIGWINCH handler
 
