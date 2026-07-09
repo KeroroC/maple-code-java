@@ -122,7 +122,9 @@ public final class App {
         Path userPermFile = Paths.get(System.getProperty("user.home"), ".maplecode", "permissions.yaml");
         RuleSet ruleSet = PermissionFileLoader.loadAll(cwd, userPermFile);
 
-        var reader = buildLineReader();
+        org.jline.terminal.Terminal terminal = org.jline.terminal.TerminalBuilder.builder()
+            .system(true).build();
+        var reader = org.jline.reader.LineReaderBuilder.builder().terminal(terminal).build();
         HitlCheck hitlCheck = new HitlCheck(
             new JLineInputSource(reader),
             new PrintStreamOutputSink(System.out));
@@ -196,15 +198,9 @@ public final class App {
         AgentConfig agentConfig = AgentConfig.fromAppConfig(raw)
             .withSystemBlocks(blocks);
 
-        ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(System.out),
+        ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
             reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager);
         repl.run();
-    }
-
-    private static org.jline.reader.LineReader buildLineReader() throws java.io.IOException {
-        org.jline.terminal.Terminal terminal =
-            org.jline.terminal.TerminalBuilder.builder().system(true).build();
-        return org.jline.reader.LineReaderBuilder.builder().terminal(terminal).build();
     }
 
     private static String combineMemorySections(String user, String project) {

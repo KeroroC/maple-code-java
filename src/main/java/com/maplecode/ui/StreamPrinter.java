@@ -4,7 +4,9 @@ import com.maplecode.agent.AgentEvent;
 import com.maplecode.compact.CompactResult;
 import com.maplecode.provider.TokenUsage;
 
-import java.io.PrintStream;
+import org.jline.terminal.Terminal;
+
+import java.io.PrintWriter;
 import java.util.function.Consumer;
 
 public final class StreamPrinter implements Consumer<AgentEvent> {
@@ -15,22 +17,27 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
     private static final String RED   = "\033[31m";
     private static final String GREEN = "\033[32m";
 
-    private final PrintStream out;
+    private final PrintWriter writer;
 
-    /** 使用标准输出创建 StreamPrinter */
+    /** 使用标准输出创建 StreamPrinter（向后兼容） */
     public StreamPrinter() {
-        this(System.out);
+        this(new PrintWriter(System.out, true));
     }
 
-    /** 指定输出流创建 StreamPrinter，便于测试时注入 */
-    public StreamPrinter(PrintStream out) {
-        this.out = out;
+    /** 使用 JLine Terminal 的 writer 创建 StreamPrinter（生产环境，用于 JLine Status 同步） */
+    public StreamPrinter(Terminal terminal) {
+        this(terminal.writer());
+    }
+
+    /** 指定 PrintWriter 创建 StreamPrinter，便于测试时注入 */
+    public StreamPrinter(PrintWriter writer) {
+        this.writer = writer;
     }
 
     /** 用粗体打印启动横幅，后面空一行 */
     public void banner(String text) {
-        out.println(BOLD + text + RESET);
-        out.println();
+        writer.println(BOLD + text + RESET);
+        writer.println();
     }
 
     /** 空操作——由 REPL 自行追踪助手回复的开始 */
@@ -40,29 +47,29 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
 
     /** 逐块输出助手文本片段，每次写入后立即 flush 以实现逐字流式显示 */
     public void write(String text) {
-        out.print(text);
-        out.flush();
+        writer.print(text);
+        writer.flush();
     }
 
     /** 用灰色输出思考过程片段，与正文视觉区分 */
     public void writeThinking(String text) {
-        out.print(DIM + text + RESET);
-        out.flush();
+        writer.print(DIM + text + RESET);
+        writer.flush();
     }
 
     /** 一条助手回复结束，打印换行 */
     public void endAssistant() {
-        out.println();
+        writer.println();
     }
 
     /** 用红色输出错误信息，前面带 ✗ 符号 */
     public void error(String message) {
-        out.println(RED + "✗ " + message + RESET);
+        writer.println(RED + "✗ " + message + RESET);
     }
 
     /** 普通文本输出，无颜色无格式 */
     public void info(String message) {
-        out.println(message);
+        writer.println(message);
     }
 
     /** 打印 token 用量统计，cache 字段仅在 >0 时显示 */
@@ -80,31 +87,31 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
 
     /** 打印空行，用于分隔对话轮次 */
     public void newline() {
-        out.println();
+        writer.println();
     }
 
     /** 工具开始。灰字行：⚙ read_file /tmp/x */
     public void toolStart(String name, String argSummary) {
         if (argSummary == null || argSummary.isEmpty()) {
-            out.println(DIM + "⚙ " + name + RESET);
+            writer.println(DIM + "⚙ " + name + RESET);
         } else {
-            out.println(DIM + "⚙ " + name + " " + argSummary + RESET);
+            writer.println(DIM + "⚙ " + name + " " + argSummary + RESET);
         }
-        out.flush();
+        writer.flush();
     }
 
     /** 工具结束。绿字 ✓ 或红字 ✗ */
     public void toolEnd(String name, boolean success, String errorDetail) {
         if (success) {
-            out.println(GREEN + "✓ " + name + RESET);
+            writer.println(GREEN + "✓ " + name + RESET);
         } else {
             String msg = errorDetail == null || errorDetail.isEmpty() ? "" : ": " + errorDetail;
             // 多行错误只取第一行，避免刷屏
             int nl = msg.indexOf('\n');
             if (nl > 0) msg = msg.substring(0, nl);
-            out.println(RED + "✗ " + name + msg + RESET);
+            writer.println(RED + "✗ " + name + msg + RESET);
         }
-        out.flush();
+        writer.flush();
     }
 
     @Override
@@ -130,7 +137,7 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
      * ReplLoop /compact 命令显式调用：打印结果到 stdout。
      */
     public void compactResult(CompactResult r) {
-        out.println(renderResult(r));
+        writer.println(renderResult(r));
     }
 
     private String renderResult(CompactResult r) {
