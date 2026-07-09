@@ -391,7 +391,7 @@ public final class ReplLoop {
         String first;
         try {
             // 阻塞调用
-            first = reader.readLine("╭─ > ");
+            first = reader.readLine("> ");
         } catch (UserInterruptException e) {
             throw e;
         }
@@ -401,7 +401,7 @@ public final class ReplLoop {
         while (true) {
             String line;
             try {
-                line = reader.readLine("│ ");
+                line = reader.readLine("... ");
             } catch (UserInterruptException e) {
                 throw e;
             }
