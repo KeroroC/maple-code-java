@@ -12,6 +12,7 @@ import com.maplecode.permission.PermissionMode;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
+import com.maplecode.provider.TokenUsage;
 import com.maplecode.session.ChatSession;
 import com.maplecode.session.archive.SessionArchive;
 import com.maplecode.tool.ToolExecutor;
@@ -37,12 +38,15 @@ public final class ReplLoop {
     private final SessionArchive sessionArchive;  // nullable
     private final CompactCoordinator coord;  // nullable
     private final com.maplecode.memory.MemoryManager memoryManager;  // nullable
+    private final StatusBar statusBar;  // nullable
+    private volatile TokenUsage lastTokenUsage;
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig,
                     SessionArchive sessionArchive, CompactCoordinator coord,
-                    com.maplecode.memory.MemoryManager memoryManager) {
+                    com.maplecode.memory.MemoryManager memoryManager,
+                    StatusBar statusBar) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -55,18 +59,19 @@ public final class ReplLoop {
         this.sessionArchive = sessionArchive;
         this.coord = coord;
         this.memoryManager = memoryManager;
+        this.statusBar = statusBar;
         java.util.function.Consumer<com.maplecode.provider.TokenUsage> usageSink = coord != null
-            ? u -> { printer.usage(u); coord.recordUsage(u); }
-            : printer::usage;
+            ? u -> { printer.usage(u); coord.recordUsage(u); lastTokenUsage = u; }
+            : u -> { printer.usage(u); lastTokenUsage = u; };
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
                 usageSink, coord);
     }
 
-    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null）。 */
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
-        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null, null);
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -74,8 +79,35 @@ public final class ReplLoop {
         throw new UnsupportedOperationException("use App.main with explicit AgentConfig");
     }
 
+    private void updateStatusBar(String mode) {
+        if (statusBar == null) return;
+        statusBar.update(new StatusBar.StatusState(
+            appConfig.model(), lastTokenUsage, mode,
+            abbreviateHome(System.getProperty("user.dir"))));
+    }
+
+    private static String abbreviateHome(String path) {
+        String home = System.getProperty("user.home");
+        if (path.startsWith(home)) {
+            return "~" + path.substring(home.length());
+        }
+        return path;
+    }
+
+    private String renderMode() {
+        String planPart = agentConfig.planMode() == PlanMode.PLAN ? "plan" : "normal";
+        String permPart = engine.mode().name().toLowerCase();
+        if ("default".equals(permPart)) return planPart;
+        return planPart + ":" + permPart;
+    }
+
     public void run() {
         printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/new 新会话，/resume 恢复会话，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，/memory 记忆管理，\"\"\" 开始多行输入");
+        // 初始化状态栏
+        if (statusBar != null) {
+            updateStatusBar(renderMode());
+            reader.getTerminal().handle(Terminal.Signal.WINCH, sig -> statusBar.resize());
+        }
         while (true) {
             String input;
             try {
@@ -213,6 +245,7 @@ public final class ReplLoop {
                     .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 agent.run(query, printer);
+                updateStatusBar(renderMode());
                 printer.newline();
                 continue;
             }
@@ -233,6 +266,7 @@ public final class ReplLoop {
                     .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 agent.run(planText, printer);
+                updateStatusBar(renderMode());
                 printer.newline();
                 continue;
             }
@@ -248,6 +282,7 @@ public final class ReplLoop {
                     case "" -> printer.info("current mode: " + engine.mode());
                     default  -> printer.error("/mode <strict|default|permissive>");
                 }
+                updateStatusBar(renderMode());
                 continue;
             }
 
@@ -258,6 +293,7 @@ public final class ReplLoop {
                     .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
                 agent.updateConfig(agentConfig);
                 printer.info("cancelled");
+                updateStatusBar(renderMode());
                 continue;
             }
 
@@ -294,6 +330,7 @@ public final class ReplLoop {
 
             // 普通对话：委托给 AgentLoop
             agent.run(trimmed, printer);
+            updateStatusBar(renderMode());
             // 记忆提取：异步，不阻塞用户交互
             if (memoryManager != null && appConfig.memoryConfig() != null && appConfig.memoryConfig().enabled()) {
                 int maxCtx = appConfig.memoryConfig().maxContextMessages();
@@ -350,7 +387,7 @@ public final class ReplLoop {
         String first;
         try {
             // 阻塞调用
-            first = reader.readLine("> ");
+            first = reader.readLine("╭─ > ");
         } catch (UserInterruptException e) {
             throw e;
         }
@@ -360,7 +397,7 @@ public final class ReplLoop {
         while (true) {
             String line;
             try {
-                line = reader.readLine("... ");
+                line = reader.readLine("│ ");
             } catch (UserInterruptException e) {
                 throw e;
             }

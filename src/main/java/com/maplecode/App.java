@@ -42,6 +42,7 @@ import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
 import com.maplecode.tool.WriteFileTool;
 import com.maplecode.ui.ReplLoop;
+import com.maplecode.ui.StatusBar;
 import com.maplecode.ui.StreamPrinter;
 
 import java.nio.file.Files;
@@ -198,8 +199,10 @@ public final class App {
         AgentConfig agentConfig = AgentConfig.fromAppConfig(raw)
             .withSystemBlocks(blocks);
 
+        StatusBar statusBar = new StatusBar(terminal);
+
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
-            reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager);
+            reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar);
         repl.run();
     }
 
