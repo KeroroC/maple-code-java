@@ -2,14 +2,14 @@
 
 ## 1. 概述
 
-为 MapleCode REPL 添加类 Claude Code 的 TUI 体验：底部固定状态栏 + 带边框的输入区域。利用 JLine 3.27.0 内置的 `Status` 类（scroll region 技巧）实现固定状态栏，ANSI box-drawing 字符实现输入框边框。
+为 MapleCode REPL 添加类 Claude Code 的 TUI 体验：底部固定状态栏 + 带上边框的输入区域。利用 JLine 3.27.0 内置的 `Status` 类（scroll region 技巧）实现固定状态栏，Unicode box-drawing 字符实现输入框上边框。
 
 ## 2. 目标
 
 - 底部固定状态栏，显示模型名称、Token 用量、当前模式、工作目录
-- 带 box-drawing 边框的输入区域，视觉上与输出区分离
-- Agent 输出时隐藏输入框和状态栏，输出区利用全部终端空间
-- Agent 结束后恢复状态栏和输入框
+- 输入区带上边框（`╭─ > `），视觉上与输出区分离
+- 状态栏在 REPL 整个生命周期内保持开启，Agent 输出在 scroll region 上方滚动
+- StreamPrinter 通过 `terminal.writer()` 输出，与 Status 共享 JLine 内部同步机制
 - 不新增外部依赖（仅用 jline-terminal 已有的 Status 类）
 - 支持终端 resize
 - dumb terminal 降级：状态栏不可用时静默跳过，不影响核心功能
@@ -18,6 +18,7 @@
 
 - Alternate screen buffer
 - 输出区边框
+- 输入框下边框（多行模式下难以维护闭合，收益低）
 - 鼠标支持
 - 语法高亮
 - Tab 补全（后续迭代）
@@ -33,8 +34,8 @@
 │ ⚙ read_file /tmp/test.txt                            │
 │ ✓ read_file                                          │
 │                                                      │
-│ ╭─ > _                                               │  ← 输入框
-│ ───────────────────────────────────────────────────  │  ← 状态栏
+│ ╭─ > _                                               │  ← 输入框（上边框 + prompt）
+│ ───────────────────────────────────────────────────  │  ← 状态栏（JLine Status，始终可见）
 │ claude-sonnet-4 │ tok:1.2k/3.4k │ plan │ ~/proj     │
 └──────────────────────────────────────────────────────┘
 ```
@@ -50,16 +51,19 @@
 | 当前模式 | `AgentConfig.planMode()` + `PermissionEngine.mode()` | `plan` / `strict` |
 | 工作目录 | `System.getProperty("user.dir")` | `~/projects/myapp` |
 
-Token 用量格式：`tok:{input}k/{output}k`，数值 < 1000 显示原始值，>= 1000 显示 `x.yk`。
+**Token 用量格式：**
+- `tok:-/-`：尚未获取到任何 token 数据（初始状态）
+- `tok:0/0`：已获取但值为零
+- `tok:123/456`：数值 < 1000 显示原始值
+- `tok:1.2k/3.4k`：数值 >= 1000 显示 `x.yk`
 
 ### 4.2 输入框
 
-使用 Unicode box-drawing 字符：
+使用 Unicode box-drawing 字符，只有上边框，没有下边框：
 
 **单行模式：**
 ```
 ╭─ > 用户输入的文本
-╰──
 ```
 
 **多行模式（`"""` 触发）：**
@@ -67,45 +71,70 @@ Token 用量格式：`tok:{input}k/{output}k`，数值 < 1000 显示原始值，
 ╭─ > """
 │ 第一行
 │ 第二行
-╰──
+│ 第三行
 ```
 
-- 上边框：`╭─ > ` 作为 `readLine()` 的 prompt 前缀，由 `print` 输出
-- `readLine()` 的 prompt 设为 `│ ` （多行续行）或空字符串（单行，上边框已含 prompt）
-- 下边框：`╰──` 在 `readLine()` 返回后输出
+**为什么没有下边框：**
+- 多行模式下，每输入一行都需要在末尾重绘下边框，而 JLine 的 readLine 不返回中间状态
+- JLine 历史回溯时，硬编码的下边框会导致行数错乱
+- 输出区的 Agent 输出自然形成视觉分隔，不需要闭合边框
 
 **实现细节：**
-- 单行模式：`reader.readLine("╭─ > ")`，结束后 `println("╰──")`
-- 多行模式：首行 `reader.readLine("╭─ > ")`，续行 `reader.readLine("│ ")`，结束后 `println("╰──")`
-- prompt 直接传入 `readLine()`，由 JLine 处理光标定位和编辑，不额外 print 边框前缀
-- 下边框在 `readLine()` 返回后输出
+- 首行 prompt：`"╭─ > "` — 直接传入 `readLine()`，JLine 处理光标和编辑
+- 续行 prompt：`"│ "` — 多行模式下使用
+- 无下边框 — `readLine()` 返回后直接进入 Agent 执行
 
 ### 4.3 交互流程
 
 ```
 启动:
-  创建 Terminal, LineReader, Status
+  创建 Terminal, LineReader, StatusBar
   status.update(初始状态)
   打印 banner
 
 每轮循环:
-  1. status.hide()               // 隐藏状态栏，释放底部空间
-  2. readLine("╭─ > ")           // 用户输入（prompt 含上边框）
-  3. println("╰──")              // 打印输入框下边框
-  4. status.show()               // 恢复状态栏
-  5. agent.run(input, sink)      // Agent 执行，输出在 scroll region 内滚动
-  6. 更新 status 内容            // token 用量、模式等
-  7. 回到 1
+  1. readLine("╭─ > ")               // 用户输入（状态栏始终在底部可见）
+  2. agent.run(input, sink)           // Agent 执行，输出在 scroll region 上方滚动
+  3. 更新 status 内容                 // token 用量、模式等
+  4. 回到 1
 ```
 
-**Agent 运行期间：**
-- Status 处于 hidden 状态，输出利用全部终端高度
-- StreamPrinter 的输出直接到 stdout，在 scroll region 内自然滚动
-- Agent 结束后 status.show() 恢复状态栏
+**关键设计：状态栏始终可见**
+- 状态栏在 REPL 整个生命周期内保持开启，绝不 hide/show
+- Agent 输出时，文本在状态栏上方的 scroll region 内自然滚动
+- 这避免了 hide/show 导致的屏幕跳动和重绘闪烁
+- 用户始终能看到模型、token 用量等关键信息
+
+**StreamPrinter 输出方式：**
+- StreamPrinter 通过 `terminal.writer()` 输出，而非 `System.out`
+- JLine 内部对 `Status.update()` 和 `terminal.writer()` 有一定的同步机制
+- 避免终端控制序列交织导致光标错位
 
 **Ctrl-C 处理：**
 - 输入时 Ctrl-C：`UserInterruptException` → `agent.cancel()` → 回到步骤 1
 - Agent 运行时 Ctrl-C：`agent.cancel()`（现有逻辑不变）
+
+### 4.4 多行输入触发机制
+
+当前实现使用 `"""` 作为多行触发器，逻辑在 `ReplLoop.readMultiline()` 中：
+
+```java
+private String readMultiline() {
+    String first = reader.readLine("╭─ > ");
+    if (first == null) return null;
+    if (!first.equals("\"\"\"")) return first;  // 非多行，直接返回
+    StringBuilder sb = new StringBuilder();
+    while (true) {
+        String line = reader.readLine("│ ");     // 续行 prompt
+        if (line == null) return null;
+        if (line.equals("\"\"\"")) break;        // 关闭多行
+        sb.append(line).append('\n');
+    }
+    // ...
+}
+```
+
+这不需要 JLine 的 `Reading` 或 `isReadingInputComplete` 机制——多行逻辑完全在应用层实现，每次 `readLine()` 都是单行读取。JLine 的 history 也正常工作（每行独立记录）。
 
 ## 5. 架构设计
 
@@ -122,8 +151,6 @@ StatusBar
 │
 ├── StatusBar(Terminal terminal)
 ├── void update(StatusState state)
-├── void hide()
-├── void show()
 ├── void resize()
 └── boolean isSupported()
 ```
@@ -154,14 +181,10 @@ public void update(StatusState state) {
     status.update(lines);
 }
 
-public void hide() {
+public void resize() {
     if (!supported) return;
-    status.hide();
-}
-
-public void show() {
-    if (!supported) return;
-    if (state != null) update(state);
+    status.resize();
+    if (state != null) update(state);  // resize 后重绘
 }
 ```
 
@@ -173,42 +196,85 @@ public void show() {
 - 工作目录：灰色
 - 分隔符 ` │ `：灰色
 
-### 5.2 修改类：`ReplLoop`
+**注意：不再提供 `hide()` / `show()` 方法** — 状态栏在 REPL 生命周期内始终可见。
+
+### 5.2 修改类：`StreamPrinter`
+
+**核心变更：引入 `Terminal` 输出**
+
+StreamPrinter 需要从 `System.out` 切换到 `terminal.writer()`，以避免与 Status 的终端控制序列交织。
+
+```java
+public final class StreamPrinter implements Consumer<AgentEvent> {
+
+    private final PrintWriter writer;  // 替代 PrintStream out
+
+    /** 使用 terminal.writer() 创建（生产环境） */
+    public StreamPrinter(Terminal terminal) {
+        this.writer = terminal.writer();
+    }
+
+    /** 指定 PrintWriter 创建（测试环境） */
+    public StreamPrinter(PrintWriter writer) {
+        this.writer = writer;
+    }
+
+    /** 向后兼容：使用 System.out（无 Terminal 时的降级） */
+    public StreamPrinter() {
+        this(new PrintWriter(System.out));
+    }
+    // ...
+}
+```
+
+**变更点：**
+- `PrintStream out` → `PrintWriter writer`
+- `write()` / `writeThinking()` / `toolStart()` / `toolEnd()` 等方法改用 `writer.print()` / `writer.flush()`
+- `error()` / `info()` / `usage()` 等方法改用 `writer.println()`
+- 构造器接受 `Terminal`（生产）或 `PrintWriter`（测试）
+
+**兼容性：**
+- 无参构造器 `new StreamPrinter()` 保持不变，使用 `System.out` 包装
+- 测试中可以注入 `PrintWriter` 到 `ByteArrayOutputStream`
+
+### 5.3 修改类：`ReplLoop`
 
 **变更点：**
 
-1. **构造器**：新增 `Terminal terminal` 参数（用于创建 StatusBar）
+1. **构造器**：接受 `StatusBar` 参数（由 App 创建后传入）
 2. **新增字段**：`StatusBar statusBar`
 3. **`run()` 方法**：
-   - 启动时初始化 StatusBar
-   - 每轮循环：`statusBar.hide()` → 输入 → `statusBar.show()` → Agent → 更新状态
+   - 启动时设置初始状态
+   - 每轮循环：输入 → Agent → 更新状态（无 hide/show）
+   - 注册 SIGWINCH handler
 4. **`readMultiline()` 方法**：
    - 首行 prompt 改为 `"╭─ > "`
    - 多行续行 prompt 改为 `"│ "`
-   - 输入结束后打印 `"╰──"`
+   - 移除 `╰──` 下边框
 5. **状态更新**：
-   - 监听 `TokenUsage`（从 `usageSink` 获取）
-   - 监听模式变化（`/mode`、`/plan`、`/do`、`/cancel`）
-   - 工作目录在启动时获取，运行中不变
-
-### 5.3 修改类：`StreamPrinter`
-
-**最小变更：**
-
-StreamPrinter 的输出方式不变（仍用 `PrintStream`），因为 JLine Status 的 scroll region 机制对 stdout 输出透明。
-
-但需要移除 `usage()` 方法中的 `[usage: ...]` 打印——token 用量改为显示在状态栏。或者保留两处（状态栏 + 详细日志），取决于用户偏好。
-
-**建议：** 保留 `usage()` 方法的详细输出（给需要看完整信息的用户），状态栏显示精简摘要。
+   - Token 用量：从 `usageSink` 捕获
+   - 模式变化：`/mode`、`/plan`、`/do`、`/cancel` 后调用 `statusBar.update()`
+   - 工作目录：启动时设置
 
 ### 5.4 修改类：`App`
 
 **变更点：**
 
-1. `buildLineReader()` 返回 `Terminal` 和 `LineReader`（或让 ReplLoop 自己获取 terminal）
-2. 传递 `Terminal` 给 `ReplLoop` 构造器
+1. `buildLineReader()` 已创建 Terminal，但当前不暴露。需要改为返回 Terminal + LineReader
+2. 创建 `StreamPrinter(terminal)` — 使用 terminal.writer()
+3. 创建 `StatusBar(terminal)` — 传给 ReplLoop
 
-**方案：** ReplLoop 通过 `reader.getTerminal()` 获取 Terminal，无需修改 `buildLineReader()`。
+**具体改动：**
+```java
+// App.main() 中：
+var terminal = org.jline.terminal.TerminalBuilder.builder().system(true).build();
+var reader = LineReaderBuilder.builder().terminal(terminal).build();
+var statusBar = new StatusBar(terminal);
+var printer = new StreamPrinter(terminal);
+
+ReplLoop repl = new ReplLoop(raw, provider, printer, reader, registry, executor,
+    engine, agentConfig, sessionArchive, coord, memoryManager, statusBar);
+```
 
 ### 5.5 依赖变更
 
@@ -233,17 +299,26 @@ StreamPrinter 的输出方式不变（仍用 `PrintStream`），因为 JLine Sta
 | iTerm2 | ✅ | 完全支持 |
 | macOS Terminal.app | ✅ | 完全支持 |
 | Windows Terminal (WSL) | ✅ | 完全支持 |
+| VS Code integrated terminal | ✅ | 完全支持 |
 | tmux | ✅ | 完全支持 |
 | screen | ✅ | 完全支持 |
 | dumb / CI / piped | ❌ | 降级（无状态栏） |
-| VS Code integrated terminal | ✅ | 完全支持 |
 
-### 6.3 降级策略
+### 6.3 Windows 兼容性
+
+Windows 下较老的 cmd.exe 或 ConPTY 模拟环境中，scroll region (DECSTBM) 支持可能不稳定，状态栏可能漂移到屏幕中间。
+
+**缓解措施：**
+- `StatusBar` 构造器中，除了 `status != null` 检查外，增加输出验证
+- 提供系统属性 `maplecode.statusbar.force=false`，用户可手动禁用
+- 如果检测到 Windows + 非 Windows Terminal 组合，打印一行警告到 stderr
+
+### 6.4 降级策略
 
 当 `StatusBar.isSupported() == false`：
-- 状态栏不显示（所有 update/hide/show 为 no-op）
-- 输入框边框仍正常显示（纯 ANSI print，不依赖终端能力）
-- 输出行为与当前版本完全一致
+- 状态栏不显示（所有 update 为 no-op）
+- 输入框上边框仍正常显示（纯 print，不依赖终端能力）
+- 输出行为与当前版本完全一致（StreamPrinter 回退到 System.out）
 
 ## 7. 终端 Resize 处理
 
@@ -256,6 +331,8 @@ terminal.handle(Terminal.Signal.WINCH, sig -> {
 
 `StatusBar.resize()` 调用 `status.resize()`，JLine Status 内部会重新计算 scroll region 并重绘。
 
+**已知限制：** 如果用户正在 `readLine()` 中编辑长文本时发生 resize，JLine 可能出现重绘错误。这是 JLine 的已知限制，属于可接受范围——resize 期间用户通常不会在编辑。
+
 ## 8. 测试策略
 
 ### 8.1 单元测试
@@ -264,49 +341,64 @@ terminal.handle(Terminal.Signal.WINCH, sig -> {
   - mock Terminal（不支持 scroll region）→ 验证降级行为（no-op）
   - mock Terminal（支持 scroll region）→ 验证 `update()` 调用 `Status.update()`
   - 验证 `StatusState` 渲染逻辑（token 格式化、路径缩略、模式着色）
+  - 验证 token 为 null/零时的格式：`tok:-/-` / `tok:0/0`
+
+- **`StreamPrinterTest`**：
+  - 注入 `PrintWriter(ByteArrayOutputStream)` → 验证输出内容
+  - 验证 `terminal.writer()` 构造器路径
 
 - **`ReplLoopTest`**（集成级）：
-  - mock StatusBar → 验证 hide/show 调用时机
-  - 验证输入框边框输出
+  - mock StatusBar → 验证 `update()` 调用时机（不在 Agent 期间调用 hide/show）
+  - 验证输入框 prompt 内容（`╭─ > ` / `│ `）
 
 ### 8.2 手工测试
 
-- 在 iTerm2 中运行，验证状态栏固定在底部
-- 验证 Agent 输出时状态栏隐藏
-- 验证 Agent 结束后状态栏恢复并更新 token 用量
+- 在 iTerm2 中运行，验证状态栏始终固定在底部
+- 验证 Agent 流式输出时状态栏保持不动，文本在上方滚动
+- 验证 Agent 结束后状态栏更新 token 用量
 - 验证 `/mode`、`/plan` 等命令触发状态栏更新
 - 验证终端 resize 后状态栏重绘
 - 在 dumb terminal 中运行，验证降级正常
+- 在 tmux 中运行，验证 scroll region 嵌套正常
 
 ## 9. 实现计划
 
 ### Phase 1：StatusBar 核心
 - 新增 `StatusBar.java` + `StatusState` record
-- 实现 `update()` / `hide()` / `show()` / `resize()`
+- 实现 `update()` / `resize()`
 - 单元测试
 
-### Phase 2：ReplLoop 集成
-- 修改 `ReplLoop` 构造器，添加 `StatusBar` 字段
-- 修改 `run()` 循环：hide → input → show → agent → update
-- 修改 `readMultiline()`：输入框边框
+### Phase 2：StreamPrinter 改造
+- 引入 `Terminal` / `PrintWriter` 构造器
+- `PrintStream` → `PrintWriter`
+- 更新 `App.java` 中的创建方式
+- 确保测试不受影响
+
+### Phase 3：ReplLoop 集成
+- 修改 `ReplLoop` 构造器，添加 `StatusBar` 参数
+- 修改 `readMultiline()`：prompt 改为 `╭─ > ` / `│ `
+- 修改 `run()` 循环：去掉 hide/show，状态栏始终可见
 - 注册 SIGWINCH handler
 
-### Phase 3：状态数据流
+### Phase 4：状态数据流
 - Token 用量：从 `usageSink` 捕获并传递给 StatusBar
 - 模式变化：`/mode`、`/plan`、`/do`、`/cancel` 后更新状态
 - 工作目录：启动时设置
 
-### Phase 4：润色与测试
-- Token 数值格式化（k 后缀）
+### Phase 5：润色与测试
+- Token 数值格式化（k 后缀、null/零处理）
 - 路径缩略（~ 替代 home）
 - 终端 resize 测试
 - 降级测试
+- Windows 兼容性检查
 
 ## 10. 风险与缓解
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| Status scroll region 与 System.out 冲突 | 输出错位 | JLine Status 设计为与 stdout 共存，save/restore cursor 保证安全 |
-| 输入框边框在窄终端上截断 | 视觉不美观 | 边框宽度 = min(内容长度, terminal width - 2) |
-| readLine() prompt 影响 Status scroll region | 行数计算错误 | hide() 在 readLine 前调用，readLine 期间无 Status 干扰 |
+| StreamPrinter 切换到 terminal.writer() 后测试困难 | 测试需要 mock Terminal | 提供 PrintWriter 构造器，测试注入 ByteArrayOutputStream |
+| Status scroll region 与 terminal.writer() 的同步 | 潜在光标错位 | JLine 内部对两者有同步机制；已验证 Status 源码的 save/restore cursor 流程 |
+| 输入框 prompt 含 Unicode 宽字符 | JLine 光标定位偏移 | box-drawing 字符在主流终端中宽度一致（1 列）；JLine 3.27.0 对 Unicode 宽度处理成熟 |
+| Windows ConPTY scroll region 不稳定 | 状态栏漂移 | 增加 Windows 终端类型检测 + 手动禁用参数 |
 | TokenUsage 在 streaming 期间不可用 | 状态栏显示旧数据 | 显示上一轮的 token 用量，Agent 结束后更新 |
+| readLine 编辑长文本时 resize | 重绘错误 | JLine 已知限制，可接受范围 |
