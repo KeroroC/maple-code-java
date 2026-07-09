@@ -88,6 +88,25 @@ class SessionReaderTest {
     }
 
     @Test
+    void truncateOrphanToolResult(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("orphan-result.jsonl");
+        // 反向孤儿：有 tool_result 但没有对应的 tool_use
+        Files.write(file, List.of(
+            "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"你好\"}]}",
+            "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"toolUseId\":\"tu_missing\",\"content\":\"文件内容\",\"isError\":false}]}"
+        ));
+
+        List<ChatMessage> messages = new SessionReader().read(file);
+
+        assertEquals(2, messages.size());
+        // 第 1 条消息：正常保留
+        assertEquals(1, messages.get(0).blocks().size());
+        assertInstanceOf(ContentBlock.TextBlock.class, messages.get(0).blocks().get(0));
+        // 第 2 条消息：反向孤儿 tool_result 应该被删除
+        assertTrue(messages.get(1).blocks().isEmpty());
+    }
+
+    @Test
     void readEmptyFileReturnsEmptyList(@TempDir Path tmp) throws Exception {
         Path file = tmp.resolve("empty.jsonl");
         Files.createFile(file);
