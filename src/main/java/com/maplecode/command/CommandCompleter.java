@@ -29,7 +29,7 @@ public class CommandCompleter implements Completer {
 
         String partial = line.word().toLowerCase();
         for (String name : registry.completableNames()) {
-            if (name.startsWith(partial)) {
+            if (("/" + name).startsWith(partial)) {
                 candidates.add(new Candidate("/" + name));
             }
         }
