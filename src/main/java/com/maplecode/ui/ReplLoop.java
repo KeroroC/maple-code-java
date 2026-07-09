@@ -3,6 +3,7 @@ package com.maplecode.ui;
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
+import com.maplecode.command.*;
 import com.maplecode.compact.CompactCoordinator;
 import com.maplecode.compact.CompactResult;
 import com.maplecode.compact.CompactTrigger;
@@ -39,14 +40,15 @@ public final class ReplLoop {
     private final CompactCoordinator coord;  // nullable
     private final com.maplecode.memory.MemoryManager memoryManager;  // nullable
     private final StatusBar statusBar;  // nullable
+    private final CommandRegistry cmdRegistry;
     private volatile TokenUsage lastTokenUsage;  // volatile 为防御性措施，当前 usageSink 和 updateStatusBar 均在主线程
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig,
                     SessionArchive sessionArchive, CompactCoordinator coord,
-                    com.maplecode.memory.MemoryManager memoryManager,
-                    StatusBar statusBar) {
+                    com.maplecode.memory.MemoryManager memoryManager, StatusBar statusBar,
+                    CommandRegistry cmdRegistry) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -60,6 +62,7 @@ public final class ReplLoop {
         this.coord = coord;
         this.memoryManager = memoryManager;
         this.statusBar = statusBar;
+        this.cmdRegistry = cmdRegistry;
         java.util.function.Consumer<com.maplecode.provider.TokenUsage> usageSink = coord != null
             ? u -> { printer.usage(u); coord.recordUsage(u); lastTokenUsage = u; }
             : u -> { printer.usage(u); lastTokenUsage = u; };
@@ -67,11 +70,12 @@ public final class ReplLoop {
                 usageSink, coord);
     }
 
-    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null）。 */
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null, cmdRegistry=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
-        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig, null, null, null, null);
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig,
+             null, null, null, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -101,254 +105,114 @@ public final class ReplLoop {
         return planPart + ":" + permPart;
     }
 
+    private class CommandContextImpl implements CommandContext {
+        @Override
+        public void sendMessage(String message) { printer.info(message); }
+
+        @Override
+        public void sendError(String message) { printer.error(message); }
+
+        @Override
+        public void sendToAgent(String prompt) {
+            agent.run(prompt, printer);
+        }
+
+        @Override
+        public void cancelCurrentAgentRun() {
+            agent.cancel();
+        }
+
+        @Override
+        public boolean isAgentRunning() {
+            return agent.isRunning();
+        }
+
+        @Override
+        public void setPlanMode(PlanMode mode) {
+            agentConfig = agentConfig.withPlanMode(mode)
+                .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
+            agent.updateConfig(agentConfig);
+        }
+
+        @Override
+        public PlanMode getPlanMode() { return agentConfig.planMode(); }
+
+        @Override
+        public PermissionMode getPermissionMode() { return engine.mode(); }
+
+        @Override
+        public void setPermissionMode(PermissionMode mode) { engine.setMode(mode); }
+
+        @Override
+        public TokenUsage getTokenUsage() { return lastTokenUsage; }
+
+        @Override
+        public void updateStatusBar() {
+            if (statusBar != null) {
+                ReplLoop.this.updateStatusBar(renderMode());
+            }
+        }
+
+        @Override
+        public String readLine(String prompt) { return reader.readLine(prompt); }
+
+        @Override
+        public ChatSession getSession() { return agent.session(); }
+
+        @Override
+        public AgentConfig getAgentConfig() { return agentConfig; }
+    }
+
     public void run() {
-        printer.banner("MapleCode — 输入 /exit 退出，/clear 清空历史，/new 新会话，/resume 恢复会话，/compact 压缩上下文，/tools 列出工具，/mode 权限模式，/plan 规划，/do 执行计划，/cancel 取消，/memory 记忆管理，\"\"\" 开始多行输入");
-        // 初始化状态栏
+        printer.banner("MapleCode — 输入 /help 查看可用命令");
+
         if (statusBar != null) {
             updateStatusBar(renderMode());
-            reader.getTerminal().handle(Terminal.Signal.WINCH, sig -> statusBar.resize());  // JLine 内部通过 pump 线程排队 puts()，信号处理器中安全
-        }
-        while (true) {
-            String input;
-            try {
-                // 阻塞式读取用户输入
-                input = readMultiline();
-            } catch (UserInterruptException e) {
-                // 输入时 Ctrl-C：取消正在运行的 agent
-                agent.cancel();
-                printer.info("(interrupted)");
-                continue;
-            } catch (RuntimeException e) {
-                break;
-            }
-            if (input == null) break;
-            String trimmed = input.trim();
-            if (trimmed.isEmpty()) continue;
-
-            // /exit
-            if (trimmed.equals("/exit")) break;
-
-            // /clear
-            if (trimmed.equals("/clear")) {
-                agent.session().clear();
-                if (coord != null) coord.resetCounter();
-                lastTokenUsage = null;
-                updateStatusBar(renderMode());
-                printer.info("history cleared");
-                continue;
-            }
-
-            // /new
-            if (trimmed.equals("/new")) {
-                if (sessionArchive != null) {
-                    String archived = sessionArchive.save(agent.session());
-                    if (archived != null) {
-                        printer.info("Archived current session (" + agent.session().size() + " messages).");
-                    }
-                }
-                agent.session().clear();
-                if (coord != null) coord.resetCounter();
-                lastTokenUsage = null;
-                updateStatusBar(renderMode());
-                printer.info("New session started.");
-                continue;
-            }
-
-            // /resume
-            if (trimmed.equals("/resume") || trimmed.startsWith("/resume ")) {
-                if (sessionArchive == null) {
-                    printer.error("session archive not available");
-                    continue;
-                }
-                String arg = trimmed.length() > 8 ? trimmed.substring(8).trim() : "";
-                if (arg.isEmpty()) {
-                    var recent = sessionArchive.listRecent(10);
-                    if (recent.isEmpty()) {
-                        printer.info("(no archived sessions)");
-                        continue;
-                    }
-                    printer.info("Recent sessions:");
-                    for (int i = 0; i < recent.size(); i++) {
-                        var meta = recent.get(i);
-                        String relTime = formatRelativeTime(meta.lastActivity());
-                        printer.info("  [" + (i + 1) + "] " + meta.id()
-                            + " (" + meta.messageCount() + " messages, " + relTime + ")");
-                    }
-                    String selection;
-                    try {
-                        selection = reader.readLine("Select [1-" + recent.size() + "]: ");
-                    } catch (Exception e) {
-                        continue;
-                    }
-                    if (selection == null) continue;
-                    int idx;
-                    try {
-                        idx = Integer.parseInt(selection.trim());
-                    } catch (NumberFormatException e) {
-                        printer.error("invalid selection");
-                        continue;
-                    }
-                    if (idx < 1 || idx > recent.size()) {
-                        printer.error("invalid selection");
-                        continue;
-                    }
-                    var chosen = recent.get(idx - 1);
-                    try {
-                        var loaded = sessionArchive.load(chosen.id());
-                        agent.session().clear();
-                        if (coord != null) coord.resetCounter();
-                        agent.session().replaceAll(loaded);
-                        printer.info("Restored " + loaded.size() + " messages from archive.");
-                    } catch (Exception e) {
-                        printer.error("failed to load session: " + e.getMessage());
-                    }
-                } else {
-                    try {
-                        var loaded = sessionArchive.load(arg);
-                        agent.session().clear();
-                        if (coord != null) coord.resetCounter();
-                        agent.session().replaceAll(loaded);
-                        printer.info("Restored " + loaded.size() + " messages from archive.");
-                    } catch (Exception e) {
-                        printer.error("failed to load session: " + e.getMessage());
-                    }
-                }
-                continue;
-            }
-
-            // /compact
-            if (trimmed.equals("/compact")) {
-                if (coord == null) {
-                    printer.error("compact not enabled");
-                    continue;
-                }
-                var usage = coord.lastSeenUsage();
-                var outcome = coord.beforeRequest(agent.session(), CompactTrigger.MANUAL, usage);
-                if (outcome.result() instanceof CompactResult.ChangedOffloadOnly
-                    || outcome.result() instanceof CompactResult.ChangedFull) {
-                    agent.session().replaceAll(outcome.newMessages());
-                }
-                printer.compactResult(outcome.result());
-                continue;
-            }
-
-            // /tools
-            if (trimmed.equals("/tools")) {
-                printTools();
-                continue;
-            }
-
-            // /plan <query>
-            if (trimmed.startsWith("/plan ")) {
-                String query = trimmed.substring(6).trim();
-                if (query.isEmpty()) {
-                    printer.error("/plan requires a query");
-                    continue;
-                }
-                agentConfig = agentConfig.withPlanMode(PlanMode.PLAN)
-                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
-                agent.updateConfig(agentConfig);
-                agent.run(query, printer);
-                updateStatusBar(renderMode());
-                printer.newline();
-                continue;
-            }
-
-            // /do
-            if (trimmed.equals("/do")) {
-                if (agentConfig.planMode() != PlanMode.PLAN) {
-                    printer.error("not in plan mode");
-                    continue;
-                }
-                String planText = lastAssistantText();
-                if (planText == null) {
-                    printer.error("no plan to execute");
-                    continue;
-                }
-                agent.session().clear();
-                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL)
-                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
-                agent.updateConfig(agentConfig);
-                agent.run(planText, printer);
-                updateStatusBar(renderMode());
-                printer.newline();
-                continue;
-            }
-
-            // /mode
-            if (trimmed.equals("/mode") || trimmed.startsWith("/mode ")) {
-                String arg = trimmed.length() > 5 ? trimmed.substring(6).trim() : "";
-                switch (arg) {
-                    case "strict", "default", "permissive" -> {
-                        engine.setMode(PermissionMode.valueOf(arg.toUpperCase()));
-                        printer.info("mode -> " + arg);
-                    }
-                    case "" -> printer.info("current mode: " + engine.mode());
-                    default  -> printer.error("/mode <strict|default|permissive>");
-                }
-                updateStatusBar(renderMode());
-                continue;
-            }
-
-            // /cancel
-            if (trimmed.equals("/cancel")) {
-                agent.cancel();
-                agentConfig = agentConfig.withPlanMode(PlanMode.NORMAL)
-                    .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
-                agent.updateConfig(agentConfig);
-                printer.info("cancelled");
-                updateStatusBar(renderMode());
-                continue;
-            }
-
-            // /memory
-            if (trimmed.equals("/memory list")) {
-                if (memoryManager == null) {
-                    printer.error("memory not enabled");
-                } else {
-                    printer.info(memoryManager.listMemories());
-                }
-                continue;
-            }
-            if (trimmed.equals("/memory clear")) {
-                if (memoryManager == null) {
-                    printer.error("memory not enabled");
-                } else {
-                    memoryManager.clearAll();
-                    printer.info("all memories cleared");
-                }
-                continue;
-            }
-            if (trimmed.equals("/memory extract")) {
-                if (memoryManager == null) {
-                    printer.error("memory not enabled");
-                } else if (appConfig.memoryConfig() == null || !appConfig.memoryConfig().enabled()) {
-                    printer.error("memory not enabled in config");
-                } else {
-                    int maxCtx = appConfig.memoryConfig().maxContextMessages();
-                    memoryManager.extractSync(agent.session().recentMessages(maxCtx));
-                    printer.info("memory extraction completed");
-                }
-                continue;
-            }
-
-            // 普通对话：委托给 AgentLoop
-            agent.run(trimmed, printer);
-            updateStatusBar(renderMode());
-            // 记忆提取：异步，不阻塞用户交互
-            if (memoryManager != null && appConfig.memoryConfig() != null && appConfig.memoryConfig().enabled()) {
-                int maxCtx = appConfig.memoryConfig().maxContextMessages();
-                memoryManager.extractAsync(agent.session().recentMessages(maxCtx));
-            }
-            printer.newline();
+            reader.getTerminal().handle(Terminal.Signal.WINCH, sig -> statusBar.resize());
         }
 
-        // 退出前自动存档
+        CommandContextImpl commandContext = new CommandContextImpl();
+
+        try {
+            while (true) {
+                String input = readMultiline();
+                if (input == null) break;
+
+                String trimmed = input.trim();
+                if (trimmed.isEmpty()) continue;
+
+                // ── 分流器 ──
+                if (CommandParser.isCommand(trimmed)) {
+                    String name = CommandParser.parseName(trimmed);
+                    String args = CommandParser.parseArgs(trimmed);
+                    java.util.Optional<Command> cmd = cmdRegistry.lookup(name);
+
+                    if (cmd.isPresent()) {
+                        try {
+                            cmd.get().execute(args, commandContext);
+                        } catch (ExitReplException e) {
+                            break;
+                        }
+                    } else {
+                        printer.error("未知命令: /" + name + "。输入 /help 查看可用命令。");
+                    }
+                } else {
+                    // 正常对话
+                    agent.run(trimmed, printer);
+
+                    // memory extract
+                    if (memoryManager != null) {
+                        memoryManager.extractAsync(agent.session().recentMessages(20));
+                    }
+                }
+            }
+        } catch (UserInterruptException e) {
+            agent.cancel();
+        }
+
+        // 退出清理
         if (sessionArchive != null) {
-            String archived = sessionArchive.save(session);
-            if (archived != null) {
-                printer.info("Session archived: " + archived);
-            }
+            sessionArchive.save(agent.session());
         }
     }
 

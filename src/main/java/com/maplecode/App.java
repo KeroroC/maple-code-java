@@ -2,6 +2,7 @@ package com.maplecode;
 
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
+import com.maplecode.command.*;
 import com.maplecode.compact.*;
 import com.maplecode.config.AppConfig;
 import com.maplecode.config.ConfigLoader;
@@ -201,8 +202,28 @@ public final class App {
 
         StatusBar statusBar = new StatusBar(terminal);
 
+        // 命令注册
+        CommandRegistry cmdRegistry = new CommandRegistry();
+        cmdRegistry.register(new CancelCommand());
+        cmdRegistry.register(new ClearCommand(coord));
+        cmdRegistry.register(new CompactCommand(coord));
+        cmdRegistry.register(new DoCommand());
+        cmdRegistry.register(new ExitCommand());
+        cmdRegistry.register(new HelpCommand(cmdRegistry));
+        if (memoryManager != null) {
+            cmdRegistry.register(new MemoryCommand(memoryManager));
+        }
+        cmdRegistry.register(new ModeCommand());
+        cmdRegistry.register(new NewCommand(sessionArchive, coord));
+        cmdRegistry.register(new PlanCommand());
+        cmdRegistry.register(new ResumeCommand(sessionArchive));
+        cmdRegistry.register(new ReviewCommand());
+        cmdRegistry.register(new StatusCommand());
+        cmdRegistry.register(new ToolsCommand(registry));
+
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
-            reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar);
+            reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar,
+            cmdRegistry);
         repl.run();
     }
 
