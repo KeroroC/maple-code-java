@@ -140,8 +140,8 @@ package com.maplecode.command;
 import com.maplecode.agent.AgentConfig;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.permission.PermissionMode;
+import com.maplecode.provider.TokenUsage;
 import com.maplecode.session.ChatSession;
-import com.maplecode.session.TokenUsage;
 
 /**
  * 窄 facade 接口，命令通过它与 UI/Agent/状态交互，不直接依赖 ReplLoop 内部。
@@ -1269,6 +1269,7 @@ package com.maplecode.command;
 import com.maplecode.compact.CompactCoordinator;
 import com.maplecode.compact.CompactResult;
 import com.maplecode.compact.CompactTrigger;
+import com.maplecode.session.ChatMessage;
 import com.maplecode.session.ChatSession;
 import org.junit.jupiter.api.Test;
 import java.util.List;
@@ -1277,19 +1278,23 @@ import static org.mockito.Mockito.*;
 class CompactCommandTest {
 
     @Test
-    void execute_noChange_sendsMessage() {
+    void execute_changed_replacesSession() {
         CompactCoordinator coord = mock(CompactCoordinator.class);
         ChatSession session = new ChatSession();
-        when(coord.beforeRequest(any(CompactTrigger.class)))
-            .thenReturn(new CompactResult.Unchanged());
+        List<ChatMessage> newMessages = List.of();
+        CompactCoordinator.CompactOutcome outcome =
+            new CompactCoordinator.CompactOutcome(
+                new CompactResult.ChangedOffloadOnly(3), newMessages);
+        when(coord.beforeRequest(any(), any(CompactTrigger.class), any()))
+            .thenReturn(outcome);
+        when(coord.lastSeenUsage()).thenReturn(null);
 
         CommandContext ctx = mock(CommandContext.class);
         when(ctx.getSession()).thenReturn(session);
 
         new CompactCommand(coord).execute("", ctx);
 
-        verify(coord).beforeRequest(CompactTrigger.MANUAL);
-        verify(ctx).sendMessage(anyString());
+        verify(session).replaceAll(newMessages);
     }
 }
 ```
@@ -1318,16 +1323,12 @@ public class CompactCommand implements Command {
 
     @Override
     public void execute(String args, CommandContext ctx) {
-        CompactResult result = coord.beforeRequest(CompactTrigger.MANUAL);
-        if (result instanceof CompactResult.ChangedOffloadOnly c) {
-            ctx.getSession().replaceAll(c.messages());
-            ctx.updateStatusBar();
-        } else if (result instanceof CompactResult.ChangedFull c) {
-            ctx.getSession().replaceAll(c.messages());
-            ctx.updateStatusBar();
-        } else {
-            ctx.sendMessage("上下文无需压缩。");
+        var outcome = coord.beforeRequest(ctx.getSession(), CompactTrigger.MANUAL, coord.lastSeenUsage());
+        if (outcome.result() instanceof CompactResult.ChangedOffloadOnly
+            || outcome.result() instanceof CompactResult.ChangedFull) {
+            ctx.getSession().replaceAll(outcome.newMessages());
         }
+        ctx.sendMessage(outcome.result().toString());
     }
 }
 ```
@@ -1489,8 +1490,8 @@ public class ResumeCommand implements Command {
         }
     }
 
-    private String formatAge(long lastActivity) {
-        long ageMs = System.currentTimeMillis() - lastActivity;
+    private String formatAge(java.time.Instant lastActivity) {
+        long ageMs = System.currentTimeMillis() - lastActivity.toEpochMilli();
         if (ageMs < 60_000) return "just now";
         if (ageMs < 3_600_000) return (ageMs / 60_000) + "m ago";
         if (ageMs < 86_400_000) return (ageMs / 3_600_000) + "h ago";
@@ -1707,10 +1708,8 @@ Expected: PASS
 package com.maplecode.command;
 
 import com.maplecode.agent.PlanMode;
+import com.maplecode.provider.ContentBlock;
 import com.maplecode.session.ChatSession;
-import com.maplecode.session.ContentBlock.TextBlock;
-import com.maplecode.session.Role;
-import com.maplecode.session.ChatMessage;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.mockito.Mockito.*;
@@ -1720,7 +1719,7 @@ class DoCommandTest {
     @Test
     void execute_inPlanMode_extractsPlanAndRuns() {
         ChatSession session = new ChatSession();
-        session.appendAssistant(List.of(new TextBlock("step 1: do this\nstep 2: do that")));
+        session.appendAssistant(List.of(new ContentBlock.TextBlock("step 1: do this\nstep 2: do that")));
 
         CommandContext ctx = mock(CommandContext.class);
         when(ctx.getPlanMode()).thenReturn(PlanMode.PLAN);
@@ -1764,10 +1763,9 @@ class DoCommandTest {
 package com.maplecode.command;
 
 import com.maplecode.agent.PlanMode;
-import com.maplecode.session.ChatMessage;
+import com.maplecode.provider.ChatMessage;
+import com.maplecode.provider.ContentBlock;
 import com.maplecode.session.ChatSession;
-import com.maplecode.session.ContentBlock;
-import com.maplecode.session.Role;
 
 public class DoCommand implements Command {
     @Override public String name() { return "do"; }
@@ -1797,8 +1795,8 @@ public class DoCommand implements Command {
     private String lastAssistantText(ChatSession session) {
         for (int i = session.size() - 1; i >= 0; i--) {
             ChatMessage msg = session.get(i);
-            if (msg.role() == Role.ASSISTANT) {
-                for (ContentBlock block : msg.content()) {
+            if (msg.role() == ChatMessage.Role.ASSISTANT) {
+                for (ContentBlock block : msg.blocks()) {
                     if (block instanceof ContentBlock.TextBlock tb) {
                         return tb.text();
                     }
