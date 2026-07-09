@@ -43,7 +43,7 @@ class ConversationSummarizerTest {
     private static final CompactConfig CFG = new CompactConfig(
         200_000, 13_000, 3_000,
         8_000, 30_000,
-        10_000, 5,
+        100, 5,  // 使用更小的 recencyTokens
         8, 4,
         3);
 
@@ -78,17 +78,22 @@ class ConversationSummarizerTest {
     }
 
     @Test
-    void successProducesSummaryUserThenTailThenBoundary() {
+    void successProducesSummaryUserThenTail() {
         LlmProvider provider = mockProviderReturning(VALID_SUMMARY);
         var summarizer = new ConversationSummarizer(provider, "model-main", null);
-        List<ChatMessage> messages = buildMessages(20);
+        // 使用更多的消息，确保 tailStart > 0
+        List<ChatMessage> messages = buildMessages(30);
 
         List<ChatMessage> result = summarizer.apply(messages, CFG);
 
-        // Expect: [summary USER] + recency tail + [boundary USER]
-        assertTrue(result.size() >= 3, "Expected at least 3 messages");
+        // Debug: print result structure
+        System.out.println("Result size: " + result.size());
+        System.out.println("Original size: " + messages.size());
 
-        // First message: summary as USER
+        // Expect: [summary USER with boundary] + recency tail
+        assertTrue(result.size() >= 2, "Expected at least 2 messages");
+
+        // First message: summary as USER (with boundary merged)
         assertEquals(Role.USER, result.get(0).role());
         String summaryText = ((TextBlock) result.get(0).blocks().get(0)).text();
         assertTrue(summaryText.startsWith("[Conversation summary]"),
@@ -100,14 +105,9 @@ class ConversationSummarizerTest {
         assertTrue(summaryText.contains("## Next Step"), "Should contain Next Step section");
         assertFalse(summaryText.contains("<scratchpad>"), "Scratchpad should be stripped");
         assertFalse(summaryText.contains("</scratchpad>"), "Scratchpad should be stripped");
-
-        // Last message: boundary
-        ChatMessage boundary = result.get(result.size() - 1);
-        assertEquals(Role.USER, boundary.role());
-        String boundaryText = ((TextBlock) boundary.blocks().get(0)).text();
-        assertTrue(boundaryText.contains("[Compact boundary]"),
-            "Last message should be boundary");
-        assertTrue(boundaryText.contains("Do NOT guess code"),
+        assertTrue(summaryText.contains("[Compact boundary]"),
+            "Boundary should be merged into summary");
+        assertTrue(summaryText.contains("Do NOT guess code"),
             "Boundary should warn against guessing");
     }
 
@@ -244,5 +244,69 @@ class ConversationSummarizerTest {
         verify(provider).stream(captor.capture(), any());
         assertEquals("model-main", captor.getValue().model(),
             "Should fallback to mainModel when summarizerModel is null");
+    }
+
+    @Test
+    void noConsecutiveUserMessages() {
+        // 构造典型场景：尾部末条是 USER（tool_result）
+        LlmProvider provider = mockProviderReturning(VALID_SUMMARY);
+        var summarizer = new ConversationSummarizer(provider, "model-main", null);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        // 前面的消息（会被压缩）- 需要足够多的消息确保 tailStart > 0
+        for (int i = 0; i < 15; i++) {
+            if (i % 2 == 0) {
+                messages.add(new ChatMessage(Role.USER, List.of(new TextBlock("User message " + i))));
+            } else {
+                messages.add(new ChatMessage(Role.ASSISTANT, List.of(new TextBlock("Assistant response " + i))));
+            }
+        }
+        // 尾部消息（会保留）- 末条是 USER
+        messages.add(new ChatMessage(Role.ASSISTANT, List.of(new TextBlock("Tool call"))));
+        messages.add(new ChatMessage(Role.USER, List.of(new TextBlock("Tool result"))));  // 尾部末条是 USER
+
+        List<ChatMessage> result = summarizer.apply(messages, CFG);
+
+        // Debug: print result structure
+        System.out.println("Result size: " + result.size());
+        for (int i = 0; i < result.size(); i++) {
+            String text = ((TextBlock) result.get(i).blocks().get(0)).text();
+            System.out.println("  [" + i + "] " + result.get(i).role() + ": " +
+                text.substring(0, Math.min(50, text.length())));
+        }
+
+        // 验证没有连续 USER 消息
+        for (int i = 1; i < result.size(); i++) {
+            Role prev = result.get(i - 1).role();
+            Role curr = result.get(i).role();
+            assertFalse(prev == Role.USER && curr == Role.USER,
+                "Found consecutive USER messages at index " + (i - 1) + " and " + i);
+        }
+    }
+
+    @Test
+    void noConsecutiveUserMessagesWhenTailStartsWithUser() {
+        // 构造场景：尾部首条是 USER
+        LlmProvider provider = mockProviderReturning(VALID_SUMMARY);
+        var summarizer = new ConversationSummarizer(provider, "model-main", null);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        // 前面的消息（会被压缩）
+        messages.add(new ChatMessage(Role.ASSISTANT, List.of(new TextBlock("Assistant message 0"))));
+        messages.add(new ChatMessage(Role.USER, List.of(new TextBlock("User message 1"))));
+        messages.add(new ChatMessage(Role.ASSISTANT, List.of(new TextBlock("Assistant message 2"))));
+        // 尾部消息（会保留）- 首条是 USER
+        messages.add(new ChatMessage(Role.USER, List.of(new TextBlock("User message 3"))));  // 尾部首条是 USER
+        messages.add(new ChatMessage(Role.ASSISTANT, List.of(new TextBlock("Assistant response 4"))));
+
+        List<ChatMessage> result = summarizer.apply(messages, CFG);
+
+        // 验证没有连续 USER 消息
+        for (int i = 1; i < result.size(); i++) {
+            Role prev = result.get(i - 1).role();
+            Role curr = result.get(i).role();
+            assertFalse(prev == Role.USER && curr == Role.USER,
+                "Found consecutive USER messages at index " + (i - 1) + " and " + i);
+        }
     }
 }

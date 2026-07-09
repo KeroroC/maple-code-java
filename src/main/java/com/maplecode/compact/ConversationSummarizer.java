@@ -95,7 +95,7 @@ public final class ConversationSummarizer {
     /**
      * 通过生成摘要和计算近期尾部来压缩消息。
      *
-     * @return [摘要 USER 消息] + 近期尾部 + [边界 USER 消息]
+     * @return [摘要 USER 消息（含边界）] + 近期尾部
      */
     public List<ChatMessage> apply(List<ChatMessage> messages, CompactConfig config) {
         String rawSummary = callSummarizer(messages);
@@ -105,14 +105,20 @@ public final class ConversationSummarizer {
         int[] recencySplit = computeRecencySplit(messages, config);
         int tailStart = recencySplit[0];
 
+        // 如果 tailStart == 0，说明所有消息都被保留为尾部，不需要压缩
+        if (tailStart == 0) {
+            return messages;
+        }
+
+        // 将边界消息合并到摘要中，避免产生额外的 USER 消息
+        String summaryWithBoundary = "[Conversation summary]\n" + summary + "\n\n" + BOUNDARY_MESSAGE.strip();
+
         List<ChatMessage> result = new ArrayList<>();
         result.add(new ChatMessage(Role.USER,
-            List.of(new TextBlock("[Conversation summary]\n" + summary))));
+            List.of(new TextBlock(summaryWithBoundary))));
         for (int i = tailStart; i < messages.size(); i++) {
             result.add(messages.get(i));
         }
-        result.add(new ChatMessage(Role.USER,
-            List.of(new TextBlock(BOUNDARY_MESSAGE.strip()))));
         return result;
     }
 
@@ -162,6 +168,7 @@ public final class ConversationSummarizer {
 
     /**
      * 计算近期分割点：[0, tailStart) 被压缩，[tailStart, size) 保留为尾部。
+     * 确保 tailStart 落在 ASSISTANT 消息上，避免与摘要 USER 连续。
      *
      * @return int[]{startIdx, tailLen}
      */
@@ -188,6 +195,13 @@ public final class ConversationSummarizer {
         }
 
         int startIdx = size - tailLen;
+
+        // 确保 tailStart 落在 ASSISTANT 消息上，避免与摘要 USER 连续
+        while (startIdx > 0 && messages.get(startIdx).role() != Role.ASSISTANT) {
+            startIdx--;
+            tailLen++;
+        }
+
         return new int[]{startIdx, tailLen};
     }
 
