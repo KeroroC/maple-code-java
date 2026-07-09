@@ -30,6 +30,7 @@ public final class AgentLoop {
     private final Consumer<TokenUsage> usageSink;
     private final CompactCoordinator coord;  // nullable
     private volatile boolean cancelled;
+    private volatile boolean running = false;
 
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
@@ -62,6 +63,13 @@ public final class AgentLoop {
         cancelled = true;
     }
 
+    /**
+     * 当前是否有 Agent 任务在执行。
+     */
+    public boolean isRunning() {
+        return running;
+    }
+
     public ChatSession session() {
         return session;
     }
@@ -71,6 +79,15 @@ public final class AgentLoop {
     }
 
     public void run(String userInput, Consumer<AgentEvent> sink) {
+        running = true;
+        try {
+            runInternal(userInput, sink);
+        } finally {
+            running = false;
+        }
+    }
+
+    private void runInternal(String userInput, Consumer<AgentEvent> sink) {
         session.appendUserText(userInput);
         int iteration = 0;
         int consecutiveUnknown = 0;
