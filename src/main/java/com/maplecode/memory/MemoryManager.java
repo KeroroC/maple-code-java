@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 记忆管理门面，协调 MemoryExtractor（LLM 调用）和 MemoryStore（文件 I/O）。
@@ -21,6 +22,7 @@ public final class MemoryManager implements Closeable {
     private final MemoryStore store;
     private final String mainModel;
     private final MemoryFailureCounter counter = new MemoryFailureCounter();
+    private final ReentrantLock storeLock = new ReentrantLock();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "memory-extractor");
         t.setDaemon(true);
@@ -52,6 +54,7 @@ public final class MemoryManager implements Closeable {
     }
 
     private void doExtract(List<ChatMessage> recentMessages) {
+        storeLock.lock();
         try {
             String model = config.memoryModel() != null ? config.memoryModel() : mainModel;
             List<MemoryEntry> allEntries = new ArrayList<>(store.loadIndex(MemoryScope.USER));
@@ -70,26 +73,38 @@ public final class MemoryManager implements Closeable {
         } catch (Exception e) {
             counter.recordFailure();
             System.err.println("[memory] WARN: extraction failed (" + counter.failures() + "): " + e.getMessage());
+        } finally {
+            storeLock.unlock();
         }
     }
 
     /** 列出所有记忆。 */
     public String listMemories() {
-        StringBuilder sb = new StringBuilder();
-        for (MemoryScope scope : MemoryScope.values()) {
-            String text = store.loadIndexText(scope);
-            if (!text.isEmpty()) {
-                if (sb.length() > 0) sb.append("\n");
-                sb.append(text);
+        storeLock.lock();
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (MemoryScope scope : MemoryScope.values()) {
+                String text = store.loadIndexText(scope);
+                if (!text.isEmpty()) {
+                    if (sb.length() > 0) sb.append("\n");
+                    sb.append(text);
+                }
             }
+            return sb.length() == 0 ? "(no memories)" : sb.toString();
+        } finally {
+            storeLock.unlock();
         }
-        return sb.length() == 0 ? "(no memories)" : sb.toString();
     }
 
     /** 清空所有记忆。 */
     public void clearAll() {
-        store.clearAll(MemoryScope.USER);
-        store.clearAll(MemoryScope.PROJECT);
+        storeLock.lock();
+        try {
+            store.clearAll(MemoryScope.USER);
+            store.clearAll(MemoryScope.PROJECT);
+        } finally {
+            storeLock.unlock();
+        }
     }
 
     @Override
