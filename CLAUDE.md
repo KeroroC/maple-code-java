@@ -11,6 +11,10 @@ MapleCode 是一个极简的 Java 21 命令行工具，通过 SSE 与 Anthropic 
 - v4 权限系统：`docs/superpowers/specs/2026-07-06-maple-code-permission-system-design.md`
 - v5 系统提示词：`docs/superpowers/specs/2026-07-05-maple-code-system-prompt-design.md`
 - v5 MCP 客户端：`docs/superpowers/specs/2026-07-06-maple-code-mcp-client-design.md`
+- v6 上下文管理：`docs/superpowers/specs/2026-07-07-maple-code-context-management-design.md`
+- v7.1 AGENTS.md 加载器：`docs/superpowers/specs/2026-07-08-maple-code-agents-md-loader-design.md`
+- v7.2 记忆系统：`docs/superpowers/specs/2026-07-08-maple-code-memory-design.md`
+- v7.3 会话归档：`docs/superpowers/specs/2026-07-08-maple-code-session-archive-design.md`
 
 ## 构建 / 运行 / 测试
 
@@ -56,7 +60,7 @@ App.main
 
 核心抽象：
 
-- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock、`ui` REPL + AgentEvent printer、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`compact` 压缩（v6）、`error` 异常类型。
+- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`agents` 跨会话记忆加载器（v7.1）、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock、`ui` REPL + AgentEvent printer、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`compact` 压缩（v6）、`memory` 记忆系统（v7.2）、`error` 异常类型。
 - **`LlmProvider`** —— 唯一方法 `void stream(ChatRequest, Consumer<StreamChunk>)`。同步推送，没有回调/future。新增后端只需实现该接口并在 `ProviderRegistry.factories` 注册工厂。
 - **`StreamChunk`** —— sealed 接口（`TextDelta | ThinkingDelta | MessageStart | MessageEnd | Error | ToolUseStart | ToolUseDelta | ToolUseEnd`）+ `StopReason` 枚举（含 `TOOL_USE`）。sealed 层次结构保证新增 chunk 变体时所有 `switch` 必须更新。
 - **`ContentBlock`** —— sealed 接口（`TextBlock | ToolUseBlock | ToolResultBlock`），用于表示消息内容。ChatMessage 的 content 从 String 改为 `List<ContentBlock>`。
