@@ -89,4 +89,22 @@ class MemoryManagerTest {
         assertTrue(store.loadIndex(MemoryScope.USER).isEmpty());
         assertTrue(store.loadIndex(MemoryScope.PROJECT).isEmpty());
     }
+
+    @Test
+    void extractAsync_doesNotThrow_afterClose() {
+        LlmProvider mockProvider = (req, sink) -> {};
+        var config = new MemoryConfig(true, "test-model", 10);
+        var store = new MemoryStore(userDir, projectDir);
+        var manager = new MemoryManager(config, mockProvider, store, "main-model");
+
+        var msgs = List.of(
+            new ChatMessage(ChatMessage.Role.USER, List.of(new ContentBlock.TextBlock("hi")))
+        );
+
+        // 关闭 executor
+        manager.close();
+
+        // 关闭后调用 extractAsync 不应抛出异常
+        assertDoesNotThrow(() -> manager.extractAsync(msgs));
+    }
 }

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -40,7 +41,11 @@ public final class MemoryManager implements Closeable {
     public void extractAsync(List<ChatMessage> recentMessages) {
         if (!config.enabled()) return;
         if (!counter.isOpen()) return;
-        executor.submit(() -> doExtract(recentMessages));
+        try {
+            executor.submit(() -> doExtract(recentMessages));
+        } catch (RejectedExecutionException ignored) {
+            // executor 已关闭（shutdown 阶段），忽略
+        }
     }
 
     /** 同步触发（/memory extract 命令）。 */
