@@ -318,8 +318,13 @@ public final class CommandParser {
      * 无参数返回 ""。
      * 输入 "/review 重点关注并发" → 返回 "重点关注并发"。
      * 输入 "/clear" → 返回 ""。
+     * 输入 "/plan  分析代码"（双空格）→ 返回 "分析代码"（trim 清理多余空格）。
      */
-    public static String parseArgs(String input) { ... }
+    public static String parseArgs(String input) {
+        int spaceIndex = input.indexOf(' ');
+        if (spaceIndex < 0) return "";
+        return input.substring(spaceIndex + 1).trim();
+    }
 }
 ```
 
@@ -730,8 +735,8 @@ reader = LineReaderBuilder.builder()
 
 **execute 逻辑**：
 - 无参 → 打印当前权限模式
-- 有参 → 解析 `PermissionMode.valueOf(args.toUpperCase())`，调 `ctx.setPermissionMode(mode)` + `ctx.updateStatusBar()`
-- 无效参数 → 报错提示用法
+- 有参 → try `PermissionMode.valueOf(args.toUpperCase())`，成功则调 `ctx.setPermissionMode(mode)` + `ctx.updateStatusBar()`
+- `IllegalArgumentException`（无效参数）→ `ctx.sendError("未知模式: " + args + "。可选: strict, default, permissive")`
 
 ### 10.10 /cancel
 
@@ -800,8 +805,9 @@ Cwd:      /Users/xxx/project
 **execute 逻辑**：
 1. 跑 `git diff` 获取变更内容（通过 `ProcessBuilder`，工作目录为 `System.getProperty("user.dir")`）
 2. diff 为空 → `ctx.sendMessage("没有检测到代码变更。")`, return
-3. 拼装审查提示词模板（见下）
-4. `ctx.sendToAgent(prompt)`
+3. diff 超长截断：`if (diff.length() > 15000)` → `ctx.sendError("代码变更过大（N 字符），请先 commit 或指定文件审查。")`, return
+4. 拼装审查提示词模板（见下）
+5. `ctx.sendToAgent(prompt)`
 
 **提示词模板**：
 
@@ -858,7 +864,18 @@ public boolean isAgentRunning() {
 }
 ```
 
-在 `run()` 方法入口设 `running = true`，出口（包括异常）设 `running = false`。
+在 `run()` 方法中，用 try-finally 保证异常时也能重置：
+
+```java
+public void run(String userInput, Consumer<AgentEvent> sink) {
+    running = true;
+    try {
+        // ... 现有逻辑
+    } finally {
+        running = false;
+    }
+}
+```
 
 ---
 
