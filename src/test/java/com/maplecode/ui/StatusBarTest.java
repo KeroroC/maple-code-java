@@ -25,6 +25,14 @@ class StatusBarTest {
         assertTrue(plain.contains("tok:-/-"), "null usage should show tok:-/-");
     }
 
+    @Test
+    void renderWithUsage_showsAbbreviatedTokens() {
+        var usage = new TokenUsage(1234, 5678, 0, 0);
+        var state = new StatusBar.StatusState("model", usage, "plan", "~/proj");
+        String plain = StatusBar.render(state).toString();
+        assertTrue(plain.contains("tok:1.2k/5.7k"), "should contain abbreviated tokens: " + plain);
+    }
+
     // --- formatUsage tests ---
 
     @Test
@@ -54,6 +62,12 @@ class StatusBarTest {
         assertEquals("0", StatusBar.abbreviate(0));
         assertEquals("1.0k", StatusBar.abbreviate(1000));
         assertEquals("12k", StatusBar.abbreviate(12000));
+    }
+
+    @Test
+    void abbreviate_boundaryAt10000() {
+        assertEquals("10.0k", StatusBar.abbreviate(9999));
+        assertEquals("10k", StatusBar.abbreviate(10000));
     }
 
     // --- coloredMode tests ---

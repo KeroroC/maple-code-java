@@ -72,8 +72,8 @@ public class StatusBar {
         return "tok:" + abbreviate(usage.inputTokens()) + "/" + abbreviate(usage.outputTokens());
     }
 
-    static String abbreviate(long n) {
-        if (n < 1000) return Long.toString(n);
+    static String abbreviate(int n) {
+        if (n < 1000) return Integer.toString(n);
         if (n < 10000) return String.format("%.1fk", n / 1000.0);
         return (n / 1000) + "k";
     }
@@ -83,6 +83,7 @@ public class StatusBar {
             case "plan" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW);
             case "strict" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.RED);
             case "permissive" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN);
+            case "default" -> AttributedStyle.DEFAULT;  // intentionally plain
             default -> AttributedStyle.DEFAULT;
         };
         return new AttributedString(mode, style);
