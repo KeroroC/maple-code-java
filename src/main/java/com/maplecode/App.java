@@ -126,19 +126,6 @@ public final class App {
 
         org.jline.terminal.Terminal terminal = org.jline.terminal.TerminalBuilder.builder()
             .system(true).build();
-        var reader = org.jline.reader.LineReaderBuilder.builder().terminal(terminal).build();
-        HitlCheck hitlCheck = new HitlCheck(
-            new JLineInputSource(reader),
-            new PrintStreamOutputSink(System.out));
-        PermissionEngine engine = new PermissionEngine(
-            List.of(
-                new BlacklistCheck(),
-                new SandboxCheck(cwd),
-                new RuleCheck(ruleSet),
-                new ModeCheck(),
-                hitlCheck),
-            raw.permissionMode());
-        hitlCheck.setEngine(engine);
 
         // 压缩系统（v6）
         CompactConfig compactCfg = CompactConfig.fromAppConfig(raw.contextWindow());
@@ -160,8 +147,6 @@ public final class App {
         if (cleaned > 0) {
             System.err.println("[session] cleaned " + cleaned + " expired archives");
         }
-
-        ToolExecutor executor = new ToolExecutor(registry, engine);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (var c : clients.values()) {
@@ -220,6 +205,26 @@ public final class App {
         cmdRegistry.register(new ReviewCommand());
         cmdRegistry.register(new StatusCommand());
         cmdRegistry.register(new ToolsCommand(registry));
+
+        // 权限引擎（需要 reader，所以在 cmdRegistry 之后创建以注入补全器）
+        var reader = org.jline.reader.LineReaderBuilder.builder()
+            .terminal(terminal)
+            .completer(new CommandCompleter(cmdRegistry))
+            .build();
+        HitlCheck hitlCheck = new HitlCheck(
+            new JLineInputSource(reader),
+            new PrintStreamOutputSink(System.out));
+        PermissionEngine engine = new PermissionEngine(
+            List.of(
+                new BlacklistCheck(),
+                new SandboxCheck(cwd),
+                new RuleCheck(ruleSet),
+                new ModeCheck(),
+                hitlCheck),
+            raw.permissionMode());
+        hitlCheck.setEngine(engine);
+
+        ToolExecutor executor = new ToolExecutor(registry, engine);
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
             reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar,
