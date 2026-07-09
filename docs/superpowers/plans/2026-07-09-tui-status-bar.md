@@ -4,7 +4,7 @@
 
 **Goal:** 为 MapleCode REPL 添加底部固定状态栏（模型、token、模式、目录）和带边框的输入区域，类 Claude Code 体验。
 
-**Architecture:** 使用 JLine 3.27.0 内置的 `Status` 类（scroll region 技巧）实现固定状态栏。StreamPrinter 从 `System.out` 切换到 `terminal.writer()` 与 Status 共享同步机制。输入框使用 `╭─ > ` 作为 readLine prompt。状态栏在 REPL 生命周期内始终可见。
+**Architecture:** 使用 JLine 3.27.0 内置的 `Status` 类（scroll region 技巧）实现固定状态栏。StreamPrinter 从 `System.out` 切换到 `terminal.writer()` 与 Status 共享同步机制。输入框使用 `> ` 作为 readLine prompt。状态栏在 REPL 生命周期内始终可见。
 
 **Tech Stack:** Java 21, JLine 3.27.0 (jline-terminal Status class), JUnit 5, Mockito 5.20.0
 
@@ -589,7 +589,7 @@ public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer
 private String readMultiline() {
     String first;
     try {
-        first = reader.readLine("╭─ > ");  // ╭─ > (含上边框)
+        first = reader.readLine("> ");
     } catch (UserInterruptException e) {
         throw e;
     }
@@ -599,7 +599,7 @@ private String readMultiline() {
     while (true) {
         String line;
         try {
-            line = reader.readLine("│ ");  // │ (续行 prompt)
+            line = reader.readLine("... ");
         } catch (UserInterruptException e) {
             throw e;
         }
@@ -702,7 +702,7 @@ git add src/main/java/com/maplecode/ui/ReplLoop.java
 git commit -m "feat(ui): integrate StatusBar into ReplLoop + change input prompts
 
 - 添加 StatusBar 字段和构造器参数
-- readMultiline(): prompt 改为 ╭─ > / │
+- readMultiline(): prompt 改为 > / ...
 - run(): 启动时初始化状态栏，注册 SIGWINCH handler
 - 每轮 Agent 执行后更新状态栏（token、模式、目录）
 - lastTokenUsage 从 usageSink 捕获"
@@ -757,7 +757,7 @@ Expected: PASS
 - [ ] **Step 4: 手工验证 — 运行程序看效果**
 
 Run: `mvn package -q && java -jar target/maple-code-java-0.1.0.jar`
-Expected: 看到状态栏在底部，输入框有 `╭─ > ` prompt
+Expected: 看到状态栏在底部，输入框有 `> ` prompt
 
 - [ ] **Step 5: Commit**
 
@@ -851,7 +851,7 @@ Expected: PASS（0 failures）
 - [ ] `/plan` 后状态栏模式变黄
 - [ ] Agent 结束后 token 用量更新
 - [ ] 终端 resize 后状态栏重绘
-- [ ] 多行输入 `"""` 续行 prompt 为 `│ `
+- [ ] 多行输入 `"""` 续行 prompt 为 `... `
 - [ ] Ctrl-C 正常中断
 
 - [ ] **Step 3: dumb terminal 降级验证**
