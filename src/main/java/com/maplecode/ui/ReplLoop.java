@@ -39,7 +39,7 @@ public final class ReplLoop {
     private final CompactCoordinator coord;  // nullable
     private final com.maplecode.memory.MemoryManager memoryManager;  // nullable
     private final StatusBar statusBar;  // nullable
-    private volatile TokenUsage lastTokenUsage;
+    private volatile TokenUsage lastTokenUsage;  // volatile 为防御性措施，当前 usageSink 和 updateStatusBar 均在主线程
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
@@ -106,7 +106,7 @@ public final class ReplLoop {
         // 初始化状态栏
         if (statusBar != null) {
             updateStatusBar(renderMode());
-            reader.getTerminal().handle(Terminal.Signal.WINCH, sig -> statusBar.resize());
+            reader.getTerminal().handle(Terminal.Signal.WINCH, sig -> statusBar.resize());  // JLine 内部通过 pump 线程排队 puts()，信号处理器中安全
         }
         while (true) {
             String input;
@@ -132,6 +132,8 @@ public final class ReplLoop {
             if (trimmed.equals("/clear")) {
                 agent.session().clear();
                 if (coord != null) coord.resetCounter();
+                lastTokenUsage = null;
+                updateStatusBar(renderMode());
                 printer.info("history cleared");
                 continue;
             }
@@ -146,6 +148,8 @@ public final class ReplLoop {
                 }
                 agent.session().clear();
                 if (coord != null) coord.resetCounter();
+                lastTokenUsage = null;
+                updateStatusBar(renderMode());
                 printer.info("New session started.");
                 continue;
             }

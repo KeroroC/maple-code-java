@@ -97,6 +97,14 @@ class StatusBarTest {
     }
 
     @Test
+    void coloredMode_compoundPlanStrictIsRed() {
+        AttributedString result = StatusBar.coloredMode("plan:strict");
+        String ansi = result.toAnsi();
+        assertTrue(ansi.contains("plan:strict"), "should contain full mode text: " + ansi);
+        assertNotEquals("plan:strict", ansi, "should have ANSI color codes (red for strict)");
+    }
+
+    @Test
     void coloredMode_permissiveIsGreen() {
         AttributedString result = StatusBar.coloredMode("permissive");
         String ansi = result.toAnsi();

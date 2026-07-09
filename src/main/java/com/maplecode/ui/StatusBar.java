@@ -79,13 +79,17 @@ public class StatusBar {
     }
 
     static AttributedString coloredMode(String mode) {
-        AttributedStyle style = switch (mode) {
-            case "plan" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW);
-            case "strict" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.RED);
-            case "permissive" -> AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN);
-            case "default" -> AttributedStyle.DEFAULT;  // intentionally plain
-            default -> AttributedStyle.DEFAULT;
-        };
+        // 支持复合模式如 "plan:strict" — 取最高优先级的颜色
+        AttributedStyle style;
+        if (mode.contains("strict")) {
+            style = AttributedStyle.DEFAULT.foreground(AttributedStyle.RED);
+        } else if (mode.contains("permissive")) {
+            style = AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN);
+        } else if (mode.contains("plan")) {
+            style = AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW);
+        } else {
+            style = AttributedStyle.DEFAULT;
+        }
         return new AttributedString(mode, style);
     }
 }
