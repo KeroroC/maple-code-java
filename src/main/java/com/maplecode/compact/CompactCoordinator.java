@@ -82,7 +82,7 @@ public final class CompactCoordinator {
         }
 
         // 获取 session 中的当前消息
-        List<ChatMessage> current = session.toRequest("unused", List.of(), null, List.of()).messages();
+        List<ChatMessage> current = session.messages();
         TokenUsage anchor = anchorOverride != null ? anchorOverride : lastSeenUsage;
 
         // 步骤 2：估算 token 数

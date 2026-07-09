@@ -81,11 +81,10 @@ public final class ConversationSummarizer {
         "I can't", "I cannot", "I'm unable"
     };
 
-    private static final int CHARS_PER_TOKEN = 4;
-
     private final LlmProvider provider;
     private final String mainModel;
     private final String summarizerModel;
+    private final TokenEstimator tokenEstimator = new TokenEstimator();
 
     public ConversationSummarizer(LlmProvider provider, String mainModel, String summarizerModelOrNull) {
         this.provider = provider;
@@ -145,10 +144,11 @@ public final class ConversationSummarizer {
     }
 
     private void validateSummary(String summary) {
-        // 检查是否包含拒绝标记
+        // 检查摘要是否以拒绝话术开头（避免正文引用误判）
+        String lower = summary.toLowerCase();
         for (String marker : REFUSAL_MARKERS) {
-            if (summary.contains(marker)) {
-                throw new CompactException("Summarizer refused: output contains '" + marker + "'");
+            if (lower.startsWith(marker.toLowerCase())) {
+                throw new CompactException("Summarizer refused: output starts with '" + marker + "'");
             }
         }
 
@@ -174,7 +174,7 @@ public final class ConversationSummarizer {
         int tokens = 0;
         int tailLen = 0;
         for (int i = size - 1; i >= 0; i--) {
-            int msgTokens = estimateTokens(messages.get(i));
+            int msgTokens = tokenEstimator.estimateMessage(messages.get(i));
             if (tokens + msgTokens > tailTokenBudget && tailLen >= minMessages) {
                 break;
             }
@@ -191,15 +191,4 @@ public final class ConversationSummarizer {
         return new int[]{startIdx, tailLen};
     }
 
-    private int estimateTokens(ChatMessage msg) {
-        int chars = 0;
-        for (ContentBlock block : msg.blocks()) {
-            if (block instanceof TextBlock tb) {
-                chars += tb.text().length();
-            }
-            // ToolUseBlock/ToolResultBlock：粗略估算
-            chars += 100; // 每个 block 的额外开销
-        }
-        return Math.max(1, chars / CHARS_PER_TOKEN);
-    }
 }

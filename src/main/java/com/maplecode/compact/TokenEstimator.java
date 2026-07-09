@@ -31,6 +31,17 @@ public final class TokenEstimator {
         return Math.max(anchorTokens, (int) (chars / 4));
     }
 
+    /**
+     * 估算单条消息的 token 数。
+     */
+    public int estimateMessage(ChatMessage msg) {
+        long chars = 0;
+        for (var block : msg.blocks()) {
+            chars += blockChars(block);
+        }
+        return Math.max(1, (int) (chars / 4));
+    }
+
     private long blockChars(ContentBlock block) {
         if (block instanceof ContentBlock.TextBlock tb) {
             return tb.text().length();

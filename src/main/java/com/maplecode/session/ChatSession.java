@@ -40,6 +40,13 @@ public final class ChatSession {
         appendAssistant(List.of(new ContentBlock.TextBlock(text)));
     }
 
+    /**
+     * 返回全部消息的不可变副本。
+     */
+    public List<ChatMessage> messages() {
+        return Collections.unmodifiableList(messages);
+    }
+
     public int size() {
         return messages.size();
     }

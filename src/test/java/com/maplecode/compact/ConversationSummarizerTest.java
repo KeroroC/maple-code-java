@@ -168,6 +168,37 @@ class ConversationSummarizerTest {
     }
 
     @Test
+    void refusalMarkerInBodyDoesNotThrow() {
+        // 正文引用"I can't"不应被误判为拒绝
+        String summaryWithQuote = """
+            <scratchpad>
+            Analysis: user mentioned API issues.
+            </scratchpad>
+
+            ## Intent
+            The user wants to fix the API integration.
+
+            ## Decisions
+            None yet.
+
+            ## Open Questions
+            The user said "I can't access that API" — unclear if auth or network issue.
+
+            ## State
+            Investigating.
+
+            ## Next Step
+            Ask the user for the exact error message.
+            """;
+        LlmProvider provider = mockProviderReturning(summaryWithQuote);
+        var summarizer = new ConversationSummarizer(provider, "model-main", null);
+        List<ChatMessage> messages = buildMessages(10);
+
+        assertDoesNotThrow(() -> summarizer.apply(messages, CFG),
+            "Refusal marker quoted in body should not be treated as refusal");
+    }
+
+    @Test
     void errorChunkThrows() {
         LlmProvider provider = mock(LlmProvider.class);
         doAnswer(inv -> {

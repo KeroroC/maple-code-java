@@ -41,8 +41,7 @@ class CompactCoordinatorTest {
 
     private ChatSession mockSession(List<ChatMessage> messages) {
         ChatSession session = mock(ChatSession.class);
-        ChatRequest req = new ChatRequest("unused", List.of(), messages, null, List.of());
-        when(session.toRequest(any(), any(), any(), any())).thenReturn(req);
+        when(session.messages()).thenReturn(messages);
         return session;
     }
 
