@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.maplecode.util.IoUtil;
+
 /**
  * 会话级文件存储。将 offload 的 tool result 落盘到 sessionDir。
  * 文件名格式：UUID-seq.txt（防冲突 + 可排序）。
@@ -32,7 +34,7 @@ public final class CompactStorage {
         String name = UUID.randomUUID() + "-" + n + ".txt";
         Path target = sessionDir.resolve(name);
         try {
-            Files.writeString(target, content);
+            IoUtil.atomicWrite(target, content);
             return target;
         } catch (IOException e) {
             throw new CompactException("offload write failed: " + target, e);

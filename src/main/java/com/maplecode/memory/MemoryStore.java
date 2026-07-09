@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import com.maplecode.util.IoUtil;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -93,7 +95,7 @@ public class MemoryStore {
         }
         String indexContent = buildIndex(allEntries);
         try {
-            Files.writeString(base.resolve(INDEX_FILENAME), indexContent, StandardCharsets.UTF_8);
+            IoUtil.atomicWrite(base.resolve(INDEX_FILENAME), indexContent);
         } catch (IOException e) {
             // silently ignore
         }
@@ -140,7 +142,7 @@ public class MemoryStore {
         String now = LocalDateTime.now().format(TS_FMT);
         String frontmatter = buildFrontmatter(c.name(), c.category().dirName(), now, now);
         try {
-            Files.writeString(filePath, frontmatter + c.content(), StandardCharsets.UTF_8);
+            IoUtil.atomicWrite(filePath, frontmatter + c.content());
         } catch (IOException e) {
             return;
         }
@@ -159,7 +161,7 @@ public class MemoryStore {
                         String now = LocalDateTime.now().format(TS_FMT);
                         String frontmatter = buildFrontmatter(fp.name, cat.dirName(), fp.created, now);
                         try {
-                            Files.writeString(mdFile, frontmatter + u.content(), StandardCharsets.UTF_8);
+                            IoUtil.atomicWrite(mdFile, frontmatter + u.content());
                         } catch (IOException e) {
                             return;
                         }

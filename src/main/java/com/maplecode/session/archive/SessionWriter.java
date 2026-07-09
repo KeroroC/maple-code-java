@@ -7,26 +7,27 @@ import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.session.ChatSession;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+
+import com.maplecode.util.IoUtil;
 
 final class SessionWriter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
     int write(ChatSession session, Path target) {
-        try (BufferedWriter w = Files.newBufferedWriter(target)) {
+        try {
+            StringBuilder sb = new StringBuilder();
             for (int i = 0; i < session.size(); i++) {
                 ChatMessage msg = session.get(i);
                 ObjectNode node = JSON.createObjectNode();
                 node.put("role", msg.role().name().toLowerCase());
                 node.set("content", serializeBlocks(msg.blocks()));
-                w.write(JSON.writeValueAsString(node));
-                w.newLine();
+                sb.append(JSON.writeValueAsString(node)).append('\n');
             }
+            IoUtil.atomicWrite(target, sb.toString());
             return session.size();
         } catch (IOException e) {
             throw new SessionArchiveException("write failed: " + target, e);
