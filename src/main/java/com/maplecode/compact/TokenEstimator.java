@@ -26,7 +26,9 @@ public final class TokenEstimator {
                 chars += blockChars(block);
             }
         }
-        return anchorTokens + (int) (chars / 4);
+        // 两者都是对全部消息的估算，不能相加（历史消息会被算两遍）。
+        // anchor 是 API 精确值但可能是上一轮的（下界），chars/4 是当前全量估算。
+        return Math.max(anchorTokens, (int) (chars / 4));
     }
 
     private long blockChars(ContentBlock block) {

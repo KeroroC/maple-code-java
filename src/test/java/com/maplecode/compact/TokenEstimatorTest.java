@@ -31,8 +31,8 @@ class TokenEstimatorTest {
         var msg = new ChatMessage(Role.USER,
             List.of(new ContentBlock.TextBlock("x".repeat(800))));
         var anchor = new TokenUsage(1000, 200, 0, 0);
-        // 1000 (anchor input) + 800/4 = 1000 + 200 = 1200
-        assertEquals(1200, est.estimate(List.of(msg), anchor));
+        // max(1000 anchor, 800/4=200 chars) = 1000
+        assertEquals(1000, est.estimate(List.of(msg), anchor));
     }
 
     @Test
@@ -40,8 +40,8 @@ class TokenEstimatorTest {
         var msg = new ChatMessage(Role.USER,
             List.of(new ContentBlock.TextBlock("x".repeat(400))));
         var anchor = new TokenUsage(500, 100, 200, 300);
-        // 500 + 200 + 300 + 400/4 = 1100
-        assertEquals(1100, est.estimate(List.of(msg), anchor));
+        // max(500+200+300=1000 anchor, 400/4=100 chars) = 1000
+        assertEquals(1000, est.estimate(List.of(msg), anchor));
     }
 
     @Test
