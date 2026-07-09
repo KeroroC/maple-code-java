@@ -4,7 +4,7 @@
 **审查范围**: `compact/`、`memory/`、`session/archive/`、`prompt/MemorySection` 及相关集成层（`App`、`AgentLoop`、`ReplLoop`、`ChatSession`、`Anthropic/OpenAi RequestMapper`）
 **审查文件数**: 33 个主源文件
 
-> **修复验证**: 2026-07-09 同日完成修复验证。15 个问题中 **10 个已修复**（B1、B2、B3、M1、M2、M3、M4、M7、M8、S2），**5 个未修复**（B4、M5、M6、S1、S3）。`mvn test` 全部通过。下文每个问题均标注修复状态与实际修复方式。
+> **修复验证**: 2026-07-09 同日完成修复验证。15 个问题中 **11 个已修复**（B1、B2、B3、B4、M1、M2、M3、M4、M7、M8、S2），**4 个未修复**（M5、M6、S1、S3）。`mvn test` 全部通过。下文每个问题均标注修复状态与实际修复方式。
 
 ---
 
@@ -98,9 +98,9 @@ private void doExtract(List<ChatMessage> recentMessages) {
 
 ---
 
-### B4. 压缩后产生连续 USER 消息，违反角色交替约束 — ❌ 未修复
+### B4. 压缩后产生连续 USER 消息，违反角色交替约束 — ✅ 已修复
 
-**文件**: `src/main/java/com/maplecode/compact/ConversationSummarizer.java` 第 108-116 行
+**文件**: `src/main/java/com/maplecode/compact/ConversationSummarizer.java` 第 100-123 行、第 199-203 行
 
 **问题**: 压缩产物结构为 `[USER 摘要] + 尾部消息 + [USER 边界]`。两端的摘要和边界消息都是 USER 角色，会产生两处连续 USER：
 
@@ -111,17 +111,34 @@ private void doExtract(List<ChatMessage> recentMessages) {
 
 **影响**: 取决于 API 行为——Anthropic API 要求 user/assistant 交替，连续 USER 可能被拒绝（400 错误）或被静默合并。若被拒绝，压缩后首次请求失败，触发熔断计数，3 次后自动压缩被永久禁用。即便 API 容错合并，摘要/边界文本与 tool_result 混在同一条 USER 消息中，也会影响模型对上下文的理解。
 
-**修复状态**: ❌ 未修复。`apply()` 方法结构未变，`computeRecencySplit` 未调整分割点的角色约束。
+**修复状态**: ✅ 已修复。采用两处改动组合解决两个连续 USER 场景：
 
-**修复建议**: `computeRecencySplit` 应保证 `tailStart` 落在 ASSISTANT 消息上（向前调整直到角色为 ASSISTANT）；或将摘要消息角色改为 SYSTEM，或用 ASSISTANT 角色包装摘要。最简方案——调整分割点：
+1. **边界消息合并到摘要**（第 113-114 行）——消除尾部末条 + 边界的连续 USER。原来独立的边界 USER 消息被合并进摘要 USER 消息，压缩产物从三条部分简化为两条：
 ```java
-// 确保 tailStart 落在 ASSISTANT 消息上，避免与前面的摘要 USER 连续
+// 将边界消息合并到摘要中，避免产生额外的 USER 消息
+String summaryWithBoundary = "[Conversation summary]\n" + summary + "\n\n" + BOUNDARY_MESSAGE.strip();
+result.add(new ChatMessage(Role.USER, List.of(new TextBlock(summaryWithBoundary))));
+for (int i = tailStart; i < messages.size(); i++) {
+    result.add(messages.get(i));
+}
+// 不再追加独立的边界 USER 消息
+```
+
+2. **computeRecencySplit 保证 tailStart 落在 ASSISTANT 消息上**（第 199-203 行）——消除摘要 USER + 尾部首条的连续 USER。若分割点落在 USER 消息上，向前扩展直到遇到 ASSISTANT：
+```java
+// 确保 tailStart 落在 ASSISTANT 消息上，避免与摘要 USER 连续
 while (startIdx > 0 && messages.get(startIdx).role() != Role.ASSISTANT) {
     startIdx--;
     tailLen++;
 }
 ```
-同时考虑将边界消息移入 system prompt 或合并到尾部最后一条 USER 消息中，避免尾部末条 + 边界的连续。
+
+3. **tailStart == 0 的边界处理**（第 108-111 行）——若所有消息都被保留为尾部（无需压缩摘要），直接返回原始消息：
+```java
+if (tailStart == 0) {
+    return messages;
+}
+```
 
 ---
 
@@ -351,7 +368,7 @@ return new CompactOutcome(
 | B1 | toSlug 越界 | Bug | ✅ 已修复 |
 | B2 | token 重复计算 | Bug | ✅ 已修复 |
 | B3 | 并发竞态 | Bug | ✅ 已修复 |
-| B4 | 连续 USER 消息 | Bug | ❌ 未修复 (P0) |
+| B4 | 连续 USER 消息 | Bug | ✅ 已修复 |
 | M1 | 假请求获取消息 | Medium | ✅ 已修复 |
 | M2 | 非原子写入 | Medium | ✅ 已修复 |
 | M3 | 拒绝标记误判 | Medium | ✅ 已修复 |
@@ -364,9 +381,8 @@ return new CompactOutcome(
 | S2 | 重复估算 | Small | ✅ 已修复 |
 | S3 | frontmatter 未转义 | Small | ❌ 未修复 |
 
-**统计**: 10 已修复 / 5 未修复。Bug 级 3/4 已修，中等级 6/8 已修，轻微级 1/3 已修。
+**统计**: 11 已修复 / 4 未修复。Bug 级 4/4 全部已修，中等级 6/8 已修，轻微级 1/3 已修。
 
 **未修复项优先级**:
-1. **P0 — B4 (连续 USER 消息)**: 唯一未修 Bug，压缩后几乎必然触发，可能导致 API 报错或熔断
-2. **P2 — M5, M6**: 健壮性改进
-3. **P3 — S1, S3**: 代码质量优化
+1. **P2 — M5, M6**: 健壮性改进
+2. **P3 — S1, S3**: 代码质量优化
