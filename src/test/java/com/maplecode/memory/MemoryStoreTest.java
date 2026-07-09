@@ -77,4 +77,13 @@ class MemoryStoreTest {
     void readContent_returnsNull_forNonExistent() {
         assertNull(store.readContent(MemoryScope.USER, MemoryCategory.USER, "nope"));
     }
+
+    @Test
+    void toSlug_specialChars_shorterThanOriginal() {
+        // "a  b" (len 4) → slug "a-b" (len 3) → substring(0, min(20, 4)) → IndexOutOfBoundsException
+        store.executeOp(new MemoryOp.Create(MemoryCategory.USER, "a  b", "double space"));
+        var entries = store.loadIndex(MemoryScope.USER);
+        assertEquals(1, entries.size());
+        assertEquals("a  b", entries.get(0).name());
+    }
 }

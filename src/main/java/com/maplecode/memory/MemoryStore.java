@@ -282,11 +282,11 @@ public class MemoryStore {
     }
 
     private static String toSlug(String name) {
-        return name.toLowerCase()
-                   .replaceAll("[^a-z0-9\\-]", "-")
-                   .replaceAll("-{2,}", "-")
-                   .replaceAll("^-|-$", "")
-                   .substring(0, Math.min(20, name.length()));
+        String slug = name.toLowerCase()
+                          .replaceAll("[^a-z0-9\\-]", "-")
+                          .replaceAll("-{2,}", "-")
+                          .replaceAll("^-|-$", "");
+        return slug.substring(0, Math.min(20, slug.length()));
     }
 
     // --- Frontmatter ---
