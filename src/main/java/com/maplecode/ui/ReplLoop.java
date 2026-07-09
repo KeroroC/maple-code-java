@@ -55,8 +55,11 @@ public final class ReplLoop {
         this.sessionArchive = sessionArchive;
         this.coord = coord;
         this.memoryManager = memoryManager;
+        java.util.function.Consumer<com.maplecode.provider.TokenUsage> usageSink = coord != null
+            ? u -> { printer.usage(u); coord.recordUsage(u); }
+            : printer::usage;
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
-                printer::usage, coord);
+                usageSink, coord);
     }
 
     /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null）。 */

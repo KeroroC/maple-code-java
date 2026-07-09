@@ -351,4 +351,28 @@ class AgentLoopTest {
         assertTrue(tr.isError(), "tool should be rejected in PLAN mode");
         assertTrue(tr.content().contains("write_file"));
     }
+
+    @Test
+    void usageSinkReceivesTokenUsageFromMessageEnd() {
+        var usage = new com.maplecode.provider.TokenUsage(1500, 300, 100, 50);
+        var chunks = List.<StreamChunk>of(
+            new StreamChunk.MessageStart(),
+            new StreamChunk.TextDelta("hello"),
+            new StreamChunk.MessageEnd(StopReason.END_TURN, usage)
+        );
+        var provider = new FakeLlmProvider(List.of(chunks));
+        var registry = new ToolRegistry(List.of());
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var captured = new java.util.concurrent.atomic.AtomicReference<com.maplecode.provider.TokenUsage>();
+        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), captured::set);
+
+        agent.run("hi", e -> {});
+
+        assertNotNull(captured.get(), "usageSink should have received TokenUsage");
+        assertEquals(1500, captured.get().inputTokens());
+        assertEquals(300, captured.get().outputTokens());
+        assertEquals(100, captured.get().cacheCreationTokens());
+        assertEquals(50, captured.get().cacheReadTokens());
+    }
 }
