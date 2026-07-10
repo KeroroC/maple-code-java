@@ -108,4 +108,117 @@ class SandboxCheckTest {
             tmp);
         assertTrue(sandbox.check(r, ctx(tmp)).isEmpty());
     }
+
+    @Test
+    void grep_symlink_path_outside_sandbox_denied(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱外的 symlink 目录
+        var outsideDir = tmp.getParent().resolve("outside-grep-" + System.nanoTime());
+        Files.createDirectories(outsideDir);
+        var link = tmp.resolve("grep-link");
+        Files.createSymbolicLink(link, outsideDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        var args = new ObjectMapper().createObjectNode()
+            .put("pattern", "secret")
+            .put("path", "grep-link");
+        var r = new PermissionRequest("grep", args, tmp);
+        var d = sandbox.check(r, ctx(tmp));
+        assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict(),
+            "grep symlink path resolves outside sandbox must deny");
+    }
+
+    @Test
+    void grep_symlink_path_inside_sandbox_allowed(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱内的 symlink 目录
+        var innerDir = tmp.resolve("inner");
+        Files.createDirectories(innerDir);
+        var link = tmp.resolve("grep-link-inner");
+        Files.createSymbolicLink(link, innerDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        var args = new ObjectMapper().createObjectNode()
+            .put("pattern", "test")
+            .put("path", "grep-link-inner");
+        var r = new PermissionRequest("grep", args, tmp);
+        assertTrue(sandbox.check(r, ctx(tmp)).isEmpty(),
+            "grep symlink path inside sandbox should be allowed");
+    }
+
+    @Test
+    void write_file_parent_symlink_outside_sandbox_denied(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱外的 symlink 目录
+        var outsideDir = tmp.getParent().resolve("outside-write-" + System.nanoTime());
+        Files.createDirectories(outsideDir);
+        var link = tmp.resolve("write-link");
+        Files.createSymbolicLink(link, outsideDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        // 目标文件不存在，但父目录是 symlink 指向沙箱外
+        var r = new PermissionRequest("write_file",
+            new ObjectMapper().createObjectNode()
+                .put("path", "write-link/new-file.txt")
+                .put("content", "test"),
+            tmp);
+        var d = sandbox.check(r, ctx(tmp));
+        assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict(),
+            "write_file via symlink parent outside sandbox must deny");
+    }
+
+    @Test
+    void write_file_parent_symlink_inside_sandbox_allowed(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱内的 symlink 目录
+        var innerDir = tmp.resolve("inner-write");
+        Files.createDirectories(innerDir);
+        var link = tmp.resolve("write-link-inner");
+        Files.createSymbolicLink(link, innerDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        // 目标文件不存在，但父目录是 symlink 指向沙箱内
+        var r = new PermissionRequest("write_file",
+            new ObjectMapper().createObjectNode()
+                .put("path", "write-link-inner/new-file.txt")
+                .put("content", "test"),
+            tmp);
+        assertTrue(sandbox.check(r, ctx(tmp)).isEmpty(),
+            "write_file via symlink parent inside sandbox should be allowed");
+    }
+
+    @Test
+    void read_file_parent_symlink_outside_sandbox_denied(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱外的 symlink 目录
+        var outsideDir = tmp.getParent().resolve("outside-read-" + System.nanoTime());
+        Files.createDirectories(outsideDir);
+        var link = tmp.resolve("read-link");
+        Files.createSymbolicLink(link, outsideDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        // 目标文件不存在，但父目录是 symlink 指向沙箱外
+        var r = new PermissionRequest("read_file",
+            new ObjectMapper().createObjectNode().put("path", "read-link/nonexistent.txt"),
+            tmp);
+        var d = sandbox.check(r, ctx(tmp));
+        assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict(),
+            "read_file via symlink parent outside sandbox must deny");
+    }
+
+    @Test
+    void edit_file_parent_symlink_outside_sandbox_denied(@TempDir Path tmp) throws Exception {
+        // 创建一个指向沙箱外的 symlink 目录
+        var outsideDir = tmp.getParent().resolve("outside-edit-" + System.nanoTime());
+        Files.createDirectories(outsideDir);
+        var link = tmp.resolve("edit-link");
+        Files.createSymbolicLink(link, outsideDir);
+
+        var sandbox = new SandboxCheck(tmp);
+        // 目标文件不存在，但父目录是 symlink 指向沙箱外
+        var r = new PermissionRequest("edit_file",
+            new ObjectMapper().createObjectNode()
+                .put("path", "edit-link/nonexistent.txt")
+                .put("old_string", "old")
+                .put("new_string", "new"),
+            tmp);
+        var d = sandbox.check(r, ctx(tmp));
+        assertEquals(Decision.Verdict.DENY, d.orElseThrow().verdict(),
+            "edit_file via symlink parent outside sandbox must deny");
+    }
 }

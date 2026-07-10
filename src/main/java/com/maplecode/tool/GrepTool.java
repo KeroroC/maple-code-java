@@ -15,6 +15,12 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
 
+/**
+ * Grep 工具：搜索文件内容。
+ * <p>
+ * 安全注意事项：遍历时会检查每个文件的真实路径是否在沙箱根目录内，
+ * 防止通过文件级 symlink 读取沙箱外的文件。
+ */
 public final class GrepTool implements Tool {
 
     private static final int BINARY_PROBE_BYTES = 8192;
@@ -61,6 +67,14 @@ public final class GrepTool implements Tool {
         Path root = ReadFileTool.resolvePath(pathStr, ctx.cwd());
         if (!Files.exists(root)) return ToolResult.error("path not found: " + pathStr);
 
+        // 解析沙箱根目录的真实路径，用于检查每个文件是否在沙箱内
+        Path sandboxRoot;
+        try {
+            sandboxRoot = ctx.cwd().toRealPath();
+        } catch (IOException e) {
+            return ToolResult.error("cannot resolve sandbox root: " + e.getMessage());
+        }
+
         PathMatcher fileMatcher = include != null
             ? FileSystems.getDefault().getPathMatcher("glob:" + include)
             : null;
@@ -71,6 +85,19 @@ public final class GrepTool implements Tool {
             while (iter.hasNext()) {
                 Path p = iter.next();
                 if (fileMatcher != null && !fileMatcher.matches(p.getFileName())) continue;
+
+                // 检查文件的真实路径是否在沙箱内，防止通过 symlink 读取沙箱外文件
+                try {
+                    Path realPath = p.toRealPath();
+                    if (!realPath.startsWith(sandboxRoot)) {
+                        // 跳过沙箱外的 symlink 文件
+                        continue;
+                    }
+                } catch (IOException e) {
+                    // 无法解析真实路径，跳过该文件
+                    continue;
+                }
+
                 if (isBinary(p)) continue;
                 List<String> fileLines = Files.readAllLines(p, StandardCharsets.UTF_8);
                 for (int i = 0; i < fileLines.size(); i++) {
