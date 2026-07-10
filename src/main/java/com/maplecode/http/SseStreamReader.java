@@ -3,6 +3,7 @@ package com.maplecode.http;
 import com.maplecode.error.ProviderException;
 
 import java.net.http.HttpResponse;
+import java.util.concurrent.CancellationException;
 import java.util.stream.Stream;
 
 public final class SseStreamReader {
@@ -53,6 +54,8 @@ public final class SseStreamReader {
             if (hasData) {
                 eventSink.accept(new SseEvent(currentEvent, data.toString()));
             }
+        } catch (CancellationException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw new ProviderException("SSE stream read failed", e);
         }

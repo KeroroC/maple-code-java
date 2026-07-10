@@ -1,13 +1,17 @@
 package com.maplecode.http;
 
+import com.maplecode.error.ProviderException;
 import com.maplecode.http.SseStreamReader.SseEvent;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -91,5 +95,24 @@ class SseStreamReaderTest {
         assertEquals(1, events.size());
         assertEquals("keepalive", events.get(0).eventType());
         assertEquals("", events.get(0).data());
+    }
+
+    @Test
+    void cancellationFromEventSinkPropagatesUnwrapped() {
+        HttpResponse<Stream<String>> resp = mock(HttpResponse.class);
+        when(resp.body()).thenReturn(Stream.of("data: one", ""));
+        var expected = new CancellationException("cancelled");
+        var actual = assertThrows(CancellationException.class,
+            () -> new SseStreamReader().read(resp, event -> { throw expected; }));
+        assertSame(expected, actual);
+    }
+
+    @Test
+    void otherRuntimeFailureIsStillWrapped() {
+        HttpResponse<Stream<String>> resp = mock(HttpResponse.class);
+        when(resp.body()).thenReturn(Stream.of("data: one", ""));
+        assertThrows(ProviderException.class,
+            () -> new SseStreamReader().read(resp,
+                event -> { throw new IllegalStateException("boom"); }));
     }
 }
