@@ -23,12 +23,6 @@ public interface CommandContext {
     /** 把文本送进对话交给 AI。同步阻塞直到 Agent 完成。 */
     void sendToAgent(String prompt);
 
-    /** 中断正在执行的 Agent 任务（设置取消标志）。 */
-    void cancelCurrentAgentRun();
-
-    /** 当前是否有 Agent 任务在执行。 */
-    boolean isAgentRunning();
-
     // ── 模式 ──
 
     void setPlanMode(PlanMode mode);

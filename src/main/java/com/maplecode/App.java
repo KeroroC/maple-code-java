@@ -189,23 +189,8 @@ public final class App {
         StatusBar statusBar = new StatusBar(terminal);
 
         // 命令注册
-        CommandRegistry cmdRegistry = new CommandRegistry();
-        cmdRegistry.register(new CancelCommand());
-        cmdRegistry.register(new ClearCommand(coord));
-        cmdRegistry.register(new CompactCommand(coord));
-        cmdRegistry.register(new DoCommand());
-        cmdRegistry.register(new ExitCommand());
-        cmdRegistry.register(new HelpCommand(cmdRegistry));
-        if (memoryManager != null) {
-            cmdRegistry.register(new MemoryCommand(memoryManager));
-        }
-        cmdRegistry.register(new ModeCommand());
-        cmdRegistry.register(new NewCommand(sessionArchive, coord));
-        cmdRegistry.register(new PlanCommand());
-        cmdRegistry.register(new ResumeCommand(sessionArchive));
-        cmdRegistry.register(new ReviewCommand());
-        cmdRegistry.register(new StatusCommand());
-        cmdRegistry.register(new ToolsCommand(registry));
+        CommandRegistry cmdRegistry = createCommandRegistry(
+            registry, sessionArchive, coord, memoryManager);
 
         // 创建带有CommandCompleter的LineReader
         var reader = org.jline.reader.LineReaderBuilder.builder()
@@ -233,6 +218,26 @@ public final class App {
             reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar,
             cmdRegistry, escapeController);
         repl.run();
+    }
+
+    static CommandRegistry createCommandRegistry(
+            ToolRegistry tools, SessionArchive archive,
+            CompactCoordinator coord, MemoryManager memoryManager) {
+        CommandRegistry commands = new CommandRegistry();
+        commands.register(new ClearCommand(coord));
+        commands.register(new CompactCommand(coord));
+        commands.register(new DoCommand());
+        commands.register(new ExitCommand());
+        commands.register(new HelpCommand(commands));
+        if (memoryManager != null) commands.register(new MemoryCommand(memoryManager));
+        commands.register(new ModeCommand());
+        commands.register(new NewCommand(archive, coord));
+        commands.register(new PlanCommand());
+        commands.register(new ResumeCommand(archive));
+        commands.register(new ReviewCommand());
+        commands.register(new StatusCommand());
+        commands.register(new ToolsCommand(tools));
+        return commands;
     }
 
     private static String combineMemorySections(String user, String project) {

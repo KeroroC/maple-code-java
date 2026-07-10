@@ -125,16 +125,6 @@ public final class ReplLoop {
         }
 
         @Override
-        public void cancelCurrentAgentRun() {
-            agent.cancel();
-        }
-
-        @Override
-        public boolean isAgentRunning() {
-            return agent.isRunning();
-        }
-
-        @Override
         public void setPlanMode(PlanMode mode) {
             agentConfig = agentConfig.withPlanMode(mode)
                 .withReminderState(com.maplecode.prompt.PlanModeReminder.State.initial());
