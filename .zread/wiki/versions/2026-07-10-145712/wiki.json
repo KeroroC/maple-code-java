@@ -1,0 +1,247 @@
+{
+  "id": "2026-07-10-145712",
+  "generated_at": "2026-07-10T06:57:12.217953Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-gai-shu-yu-he-xin-jie-zhi",
+      "title": "项目概述与核心价值",
+      "file": "1-xiang-mu-gai-shu-yu-he-xin-jie-zhi.md",
+      "section": "快速入门",
+      "level": "..."
+    },
+    {
+      "slug": "2-huan-jing-zhun-bei-yu-kuai-su-kai-shi",
+      "title": "环境准备与快速开始",
+      "file": "2-huan-jing-zhun-bei-yu-kuai-su-kai-shi.md",
+      "section": "快速入门",
+      "level": "..."
+    },
+    {
+      "slug": "3-pei-zhi-wen-jian-xiang-jie",
+      "title": "配置文件详解",
+      "file": "3-pei-zhi-wen-jian-xiang-jie.md",
+      "section": "快速入门",
+      "level": "..."
+    },
+    {
+      "slug": "4-ji-chu-shi-yong-zhi-nan",
+      "title": "基础使用指南",
+      "file": "4-ji-chu-shi-yong-zhi-nan.md",
+      "section": "快速入门",
+      "level": "..."
+    },
+    {
+      "slug": "5-zheng-ti-jia-gou-yu-shu-ju-liu",
+      "title": "整体架构与数据流",
+      "file": "5-zheng-ti-jia-gou-yu-shu-ju-liu.md",
+      "section": "架构与设计",
+      "level": "..."
+    },
+    {
+      "slug": "6-he-xin-chou-xiang-yu-jie-kou-she-ji",
+      "title": "核心抽象与接口设计",
+      "file": "6-he-xin-chou-xiang-yu-jie-kou-she-ji.md",
+      "section": "架构与设计",
+      "level": "..."
+    },
+    {
+      "slug": "7-tong-jie-kou-llmprovider",
+      "title": "统一接口 LlmProvider",
+      "file": "7-tong-jie-kou-llmprovider.md",
+      "section": "架构与设计",
+      "group": "LLM Provider 抽象层",
+      "level": "..."
+    },
+    {
+      "slug": "8-anthropic-yu-openai-shi-xian",
+      "title": "Anthropic 与 OpenAI 实现",
+      "file": "8-anthropic-yu-openai-shi-xian.md",
+      "section": "架构与设计",
+      "group": "LLM Provider 抽象层",
+      "level": "..."
+    },
+    {
+      "slug": "9-sse-liu-shi-jie-xi-ji-zhi",
+      "title": "SSE 流式解析机制",
+      "file": "9-sse-liu-shi-jie-xi-ji-zhi.md",
+      "section": "架构与设计",
+      "group": "LLM Provider 抽象层",
+      "level": "..."
+    },
+    {
+      "slug": "10-tool-jie-kou-yu-nei-zhi-gong-ju",
+      "title": "Tool 接口与内置工具",
+      "file": "10-tool-jie-kou-yu-nei-zhi-gong-ju.md",
+      "section": "架构与设计",
+      "group": "工具系统",
+      "level": "..."
+    },
+    {
+      "slug": "11-toolregistry-yu-toolexecutor",
+      "title": "ToolRegistry 与 ToolExecutor",
+      "file": "11-toolregistry-yu-toolexecutor.md",
+      "section": "架构与设计",
+      "group": "工具系统",
+      "level": "..."
+    },
+    {
+      "slug": "12-mcp-ke-hu-duan-ji-cheng",
+      "title": "MCP 客户端集成",
+      "file": "12-mcp-ke-hu-duan-ji-cheng.md",
+      "section": "架构与设计",
+      "group": "工具系统",
+      "level": "..."
+    },
+    {
+      "slug": "13-wu-ceng-quan-xian-fang-yu-guan-dao",
+      "title": "五层权限防御管道",
+      "file": "13-wu-ceng-quan-xian-fang-yu-guan-dao.md",
+      "section": "架构与设计",
+      "group": "权限与安全",
+      "level": "..."
+    },
+    {
+      "slug": "14-quan-xian-pei-zhi-yu-gui-ze-yin-qing",
+      "title": "权限配置与规则引擎",
+      "file": "14-quan-xian-pei-zhi-yu-gui-ze-yin-qing.md",
+      "section": "架构与设计",
+      "group": "权限与安全",
+      "level": "..."
+    },
+    {
+      "slug": "15-ren-zai-hui-lu-hitl-ji-zhi",
+      "title": "人在回路（HITL）机制",
+      "file": "15-ren-zai-hui-lu-hitl-ji-zhi.md",
+      "section": "架构与设计",
+      "group": "权限与安全",
+      "level": "..."
+    },
+    {
+      "slug": "16-agent-loop-shi-xian",
+      "title": "Agent Loop 实现",
+      "file": "16-agent-loop-shi-xian.md",
+      "section": "核心功能模块",
+      "level": "..."
+    },
+    {
+      "slug": "17-shang-xia-wen-guan-li-yu-ya-suo",
+      "title": "上下文管理与压缩",
+      "file": "17-shang-xia-wen-guan-li-yu-ya-suo.md",
+      "section": "核心功能模块",
+      "level": "..."
+    },
+    {
+      "slug": "18-chang-qi-ji-yi-xi-tong",
+      "title": "长期记忆系统",
+      "file": "18-chang-qi-ji-yi-xi-tong.md",
+      "section": "核心功能模块",
+      "level": "..."
+    },
+    {
+      "slug": "19-hui-hua-guan-li-yu-gui-dang",
+      "title": "会话管理与归档",
+      "file": "19-hui-hua-guan-li-yu-gui-dang.md",
+      "section": "核心功能模块",
+      "level": "..."
+    },
+    {
+      "slug": "20-ming-ling-kuang-jia-yu-repl",
+      "title": "命令框架与 REPL",
+      "file": "20-ming-ling-kuang-jia-yu-repl.md",
+      "section": "核心功能模块",
+      "level": "..."
+    },
+    {
+      "slug": "21-kuo-zhan-xing-she-ji-yu-cha-jian-ji-zhi",
+      "title": "扩展性设计与插件机制",
+      "file": "21-kuo-zhan-xing-she-ji-yu-cha-jian-ji-zhi.md",
+      "section": "高级主题",
+      "level": "..."
+    },
+    {
+      "slug": "22-xing-neng-you-hua-yu-zi-yuan-guan-li",
+      "title": "性能优化与资源管理",
+      "file": "22-xing-neng-you-hua-yu-zi-yuan-guan-li.md",
+      "section": "高级主题",
+      "level": "..."
+    },
+    {
+      "slug": "23-cuo-wu-chu-li-yu-yi-chang-she-ji",
+      "title": "错误处理与异常设计",
+      "file": "23-cuo-wu-chu-li-yu-yi-chang-she-ji.md",
+      "section": "高级主题",
+      "level": "..."
+    },
+    {
+      "slug": "24-ce-shi-ce-lue-yu-zhi-liang-bao-zheng",
+      "title": "测试策略与质量保证",
+      "file": "24-ce-shi-ce-lue-yu-zhi-liang-bao-zheng.md",
+      "section": "高级主题",
+      "level": "..."
+    },
+    {
+      "slug": "25-diao-shi-yu-gu-zhang-pai-chu",
+      "title": "调试与故障排除",
+      "file": "25-diao-shi-yu-gu-zhang-pai-chu.md",
+      "section": "高级主题",
+      "level": "..."
+    },
+    {
+      "slug": "26-dai-ma-gui-fan-yu-yue-ding",
+      "title": "代码规范与约定",
+      "file": "26-dai-ma-gui-fan-yu-yue-ding.md",
+      "section": "开发实践",
+      "level": "..."
+    },
+    {
+      "slug": "27-xin-zeng-llm-provider-zhi-nan",
+      "title": "新增 LLM Provider 指南",
+      "file": "27-xin-zeng-llm-provider-zhi-nan.md",
+      "section": "开发实践",
+      "level": "..."
+    },
+    {
+      "slug": "28-zi-ding-yi-gong-ju-kai-fa",
+      "title": "自定义工具开发",
+      "file": "28-zi-ding-yi-gong-ju-kai-fa.md",
+      "section": "开发实践",
+      "level": "..."
+    },
+    {
+      "slug": "29-quan-xian-gui-ze-pei-zhi-zui-jia-shi-jian",
+      "title": "权限规则配置最佳实践",
+      "file": "29-quan-xian-gui-ze-pei-zhi-zui-jia-shi-jian.md",
+      "section": "开发实践",
+      "level": "..."
+    },
+    {
+      "slug": "30-xi-tong-ti-shi-ci-you-hua",
+      "title": "系统提示词优化",
+      "file": "30-xi-tong-ti-shi-ci-you-hua.md",
+      "section": "开发实践",
+      "level": "..."
+    },
+    {
+      "slug": "31-she-ji-wen-dang-suo-yin",
+      "title": "设计文档索引",
+      "file": "31-she-ji-wen-dang-suo-yin.md",
+      "section": "设计文档与演进",
+      "level": "..."
+    },
+    {
+      "slug": "32-ban-ben-yan-jin-yu-li-shi",
+      "title": "版本演进与历史",
+      "file": "32-ban-ben-yan-jin-yu-li-shi.md",
+      "section": "设计文档与演进",
+      "level": "..."
+    },
+    {
+      "slug": "33-wei-lai-gui-hua-yu-lu-xian-tu",
+      "title": "未来规划与路线图",
+      "file": "33-wei-lai-gui-hua-yu-lu-xian-tu.md",
+      "section": "设计文档与演进",
+      "level": "..."
+    }
+  ]
+}
