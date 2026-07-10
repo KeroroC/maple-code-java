@@ -57,6 +57,17 @@ public final class IncludeResolver {
                 out.append(m.group(0));
             } else {
                 try {
+                    // 解析符号链接，检查真实路径是否在根目录内
+                    Path realTarget = target.toRealPath();
+                    Path realRoot = rootDir.toRealPath();
+                    if (!realTarget.startsWith(realRoot)) {
+                        System.err.println("[agents-md] {{include: " + includePath + "}} at "
+                            + currentDir + ":" + lineInfo
+                            + ": symlink target escapes base directory (" + realTarget + ")");
+                        out.append(m.group(0));
+                        lastEnd = m.end();
+                        continue;
+                    }
                     String subContent = Files.readString(target);
                     Set<Path> nextVisited = new HashSet<>(visited);
                     nextVisited.add(target);

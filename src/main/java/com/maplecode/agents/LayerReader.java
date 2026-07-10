@@ -19,6 +19,13 @@ public final class LayerReader {
             return Layer.empty(path);
         }
         try {
+            // 拒绝符号链接：AGENTS.md 本身不应是 symlink，防止读取仓库外文件
+            if (Files.isSymbolicLink(path)) {
+                Path realPath = path.toRealPath();
+                System.err.println("[agents-md] " + path + ": symlink detected, resolved to " + realPath
+                    + " — refusing to follow symlink");
+                return Layer.empty(path);
+            }
             long size = Files.size(path);
             if (size > IncludeLimits.defaults().maxFileSize()) {
                 System.err.println("[agents-md] " + path + ": file too large: "

@@ -45,4 +45,17 @@ class LayerReaderTest {
         assertTrue(layer.exists());
         assertEquals("# rules\n- use Java 21", layer.content());
     }
+
+    @Test
+    void symlinkIsRejected() throws IOException {
+        // 创建真实文件和指向它的符号链接
+        Path real = tmp.resolve("real.md");
+        Files.writeString(real, "secret content");
+        Path symlink = tmp.resolve("AGENTS.md");
+        Files.createSymbolicLink(symlink, real);
+
+        Layer layer = LayerReader.read(Layer.empty(symlink));
+        assertFalse(layer.exists(), "符号链接应被拒绝");
+        assertEquals("", layer.content(), "符号链接不应读取内容");
+    }
 }

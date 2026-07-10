@@ -130,4 +130,48 @@ class IncludeResolverTest {
             Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
         assertEquals("[A]-[B]", result);
     }
+
+    @Test
+    void symlinkPointingOutsideBaseDirIsRejected() throws IOException {
+        // 创建一个仓库外的敏感文件
+        Path outside = tmp.resolveSibling("outside-secret.txt");
+        Files.writeString(outside, "SECRET_KEY=abc123");
+
+        // 在仓库内创建符号链接指向仓库外文件
+        Path symlink = tmp.resolve("evil.md");
+        Files.createSymbolicLink(symlink, outside);
+
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: evil.md}} Y");
+
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+
+        // 应该拒绝：symlink 目标逃逸出根目录
+        assertTrue(result.contains("{{include: evil.md}}"),
+            "symlink 逃逸的占位应保留原文，实际：" + result);
+        assertFalse(result.contains("SECRET_KEY"),
+            "不应读取仓库外文件内容，实际：" + result);
+
+        // 清理
+        Files.deleteIfExists(outside);
+    }
+
+    @Test
+    void symlinkPointingInsideBaseDirIsFollowed() throws IOException {
+        // 仓库内的 symlink 指向仓库内另一个文件 → 应该被允许
+        Path real = tmp.resolve("real.md");
+        Files.writeString(real, "real content");
+        Path symlink = tmp.resolve("link.md");
+        Files.createSymbolicLink(symlink, real);
+
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: link.md}} Y");
+
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+
+        assertEquals("X real content Y", result,
+            "仓库内 symlink 应该被正常展开");
+    }
 }
