@@ -1,7 +1,7 @@
 # v8 斜杠命令框架设计规格
 
 **日期**：2026-07-09
-**范围**：为 MapleCode 实现斜杠命令注册与分发框架。将现有 13 个内联命令（`/exit`, `/clear`, `/new`, `/resume`, `/compact`, `/tools`, `/plan`, `/do`, `/mode`, `/cancel`, `/memory`）从 `ReplLoop` 的 if-else 链中抽出，重构为 `Command` 接口 + `CommandRegistry` 注册中心 + `CommandParser` 解析器的标准化框架。新增 `/help` 和 `/review` 两个命令。支持 Tab 补全。
+**范围**：为 MapleCode 实现斜杠命令注册与分发框架。将现有 12 个内联命令（`/exit`, `/clear`, `/new`, `/resume`, `/compact`, `/tools`, `/plan`, `/do`, `/mode`, `/memory`）从 `ReplLoop` 的 if-else 链中抽出，重构为 `Command` 接口 + `CommandRegistry` 注册中心 + `CommandParser` 解析器的标准化框架。新增 `/help`、`/status` 和 `/review` 三个命令。支持 Tab 补全。
 **不做**：用户自定义命令、动态生成提示词、命令级权限控制、Skill 系统（留给后续阶段）。
 
 ---
@@ -16,7 +16,8 @@
 - `CommandContext` 窄接口，命令只通过它与 UI/Agent/状态交互，不直接依赖 `ReplLoop` 内部
 - 控制流异常 `ExitReplException` 供 `/exit` 命令终止 REPL 主循环
 - `CommandCompleter` 集成 JLine 的 `Completer` 接口，Tab 补全仅在行首触发，隐藏命令不参与
-- 14 个内置命令：`/help`, `/clear`, `/new`, `/resume`, `/compact`, `/tools`, `/plan`, `/do`, `/mode`, `/cancel`, `/memory`, `/status`, `/review`, `/exit`
+- 13 个内置命令：`/help`, `/clear`, `/new`, `/resume`, `/compact`, `/tools`, `/plan`, `/do`, `/mode`, `/memory`, `/status`, `/review`, `/exit`
+- 取消操作通过 Esc 键实现（非斜杠命令）
 - `ReplLoop.run()` 从 ~300 行 if-else 链瘦身到 ~50 行分发器
 
 **非目标**
@@ -25,7 +26,7 @@
 - 动态生成提示词
 - 命令级权限控制（哪些命令可用、哪些需要确认）
 - 命令历史统计
-- 异步命令执行（当前 agent.run 是同步阻塞，/cancel 通过取消标志实现）
+- 异步命令执行（当前 agent.run 是同步阻塞，取消通过 Esc 键实现）
 
 ---
 
@@ -49,7 +50,6 @@ com.maplecode.command/
   PlanCommand          — /plan
   DoCommand            — /do
   ModeCommand          — /mode
-  CancelCommand        — /cancel
   MemoryCommand        — /memory
   StatusCommand        — /status
   ReviewCommand        — /review
@@ -168,9 +168,6 @@ public interface CommandContext {
      * 用于 /plan、/do、/review 等 PROMPT 类型命令。
      */
     void sendToAgent(String prompt);
-
-    /** 中断正在执行的 Agent 任务（设置取消标志）。 */
-    void cancelCurrentAgentRun();
 
     /** 当前是否有 Agent 任务在执行。 */
     boolean isAgentRunning();
@@ -390,7 +387,7 @@ public class CommandCompleter implements Completer {
 | 用户输入 | 光标位置 | 触发？ | 补全结果 |
 |----------|----------|--------|----------|
 | `/he` | 行首 | 是 | `/help`（单匹配直接补全） |
-| `/c` | 行首 | 是 | `/clear`, `/compact`, `/cancel`（多匹配弹菜单） |
+| `/c` | 行首 | 是 | `/clear`, `/compact`（多匹配弹菜单） |
 | `/review 看看 /cl` | `/cl` 处 | 否 | `wordIndex() > 0`，不触发 |
 | `帮我跑 /he` | 行首 | 否 | `startsWith("/")` 为 false |
 | `/hidden` | 行首 | 否 | `completableNames()` 已过滤隐藏命令 |
@@ -436,11 +433,6 @@ private class CommandContextImpl implements CommandContext {
     @Override
     public void sendToAgent(String prompt) {
         agent.run(prompt, printer);
-    }
-
-    @Override
-    public void cancelCurrentAgentRun() {
-        agent.cancel();
     }
 
     @Override
@@ -534,8 +526,6 @@ public void run() {
                 }
             }
         }
-    } catch (UserInterruptException e) {
-        agent.cancel();
     }
 
     // 退出清理（不变）
@@ -564,7 +554,6 @@ cmdRegistry.register(new ToolsCommand(registry));
 cmdRegistry.register(new PlanCommand());
 cmdRegistry.register(new DoCommand());
 cmdRegistry.register(new ModeCommand());
-cmdRegistry.register(new CancelCommand());
 cmdRegistry.register(new MemoryCommand(memoryManager));
 cmdRegistry.register(new StatusCommand());
 cmdRegistry.register(new ReviewCommand());
@@ -585,7 +574,7 @@ reader = LineReaderBuilder.builder()
 
 ---
 
-## 10. 14 个内置命令规格
+## 10. 13 个内置命令规格
 
 ### 10.0 依赖注入原则
 
@@ -738,22 +727,7 @@ reader = LineReaderBuilder.builder()
 - 有参 → try `PermissionMode.valueOf(args.toUpperCase())`，成功则调 `ctx.setPermissionMode(mode)` + `ctx.updateStatusBar()`
 - `IllegalArgumentException`（无效参数）→ `ctx.sendError("未知模式: " + args + "。可选: strict, default, permissive")`
 
-### 10.10 /cancel
-
-| 属性 | 值 |
-|------|-----|
-| name | `cancel` |
-| aliases | `[]` |
-| type | `LOCAL` |
-| hidden | `false` |
-| usage | `/cancel` |
-
-**execute 逻辑**：
-1. `ctx.cancelCurrentAgentRun()`
-2. `ctx.setPlanMode(PlanMode.NORMAL)`
-3. `ctx.updateStatusBar()`
-
-### 10.11 /memory
+### 10.10 /memory
 
 | 属性 | 值 |
 |------|-----|
@@ -770,7 +744,7 @@ reader = LineReaderBuilder.builder()
 - args = `"extract"` → `memoryManager.extractSync(ctx.getSession().recentMessages(20))`
 - 其他 → 报错提示用法
 
-### 10.12 /status
+### 10.11 /status
 
 | 属性 | 值 |
 |------|-----|
@@ -792,7 +766,7 @@ Plan:     normal
 Cwd:      /Users/xxx/project
 ```
 
-### 10.13 /review
+### 10.12 /review
 
 | 属性 | 值 |
 |------|-----|
@@ -835,7 +809,7 @@ Cwd:      /Users/xxx/project
 
 args 为空时，"额外关注点"行显示"（无）"。
 
-### 10.14 /exit
+### 10.13 /exit
 
 | 属性 | 值 |
 |------|-----|

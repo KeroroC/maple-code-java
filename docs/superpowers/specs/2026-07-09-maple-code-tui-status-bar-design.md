@@ -105,9 +105,10 @@
 - JLine 内部对 `Status.update()` 和 `terminal.writer()` 有一定的同步机制
 - 避免终端控制序列交织导致光标错位
 
-**Ctrl-C 处理：**
-- 输入时 Ctrl-C：`UserInterruptException` → `agent.cancel()` → 回到步骤 1
-- Agent 运行时 Ctrl-C：`agent.cancel()`（现有逻辑不变）
+**Esc 键处理：**
+- Agent 流式输出期间单击 Esc：立即取消当前流式响应（通过 `EscapeController`）
+- 用户输入期间 500ms 内双击 Esc：清空输入
+- 多行输入期间双击 Esc：丢弃整段内容并返回主提示符
 
 ### 4.4 多行输入触发机制
 
@@ -248,7 +249,7 @@ public final class StreamPrinter implements Consumer<AgentEvent> {
    - 移除 `╰──` 下边框
 5. **状态更新**：
    - Token 用量：从 `usageSink` 捕获
-   - 模式变化：`/mode`、`/plan`、`/do`、`/cancel` 后调用 `statusBar.update()`
+   - 模式变化：`/mode`、`/plan`、`/do` 后调用 `statusBar.update()`
    - 工作目录：启动时设置
 
 ### 5.4 修改类：`App`
@@ -377,7 +378,7 @@ terminal.handle(Terminal.Signal.WINCH, sig -> {
 
 ### Phase 4：状态数据流
 - Token 用量：从 `usageSink` 捕获并传递给 StatusBar
-- 模式变化：`/mode`、`/plan`、`/do`、`/cancel` 后更新状态
+- 模式变化：`/mode`、`/plan`、`/do` 后更新状态
 - 工作目录：启动时设置
 
 ### Phase 5：润色与测试

@@ -118,9 +118,14 @@ ToolExecutor.run()
 | `/tools` | 列出所有可用工具（内置 + MCP，含多行 description） |
 | `/plan <query>` | 规划模式：只读工具，模型只分析不执行 |
 | `/do` | 执行上一条规划 |
-| `/cancel` | 取消当前执行 |
 | `/mode [s\|d\|p]` | 查看或切换 strict/default/permissive |
 | `/exit` 或 Ctrl+D | 正常退出（退出码 0） |
+
+**Esc 键行为：**
+
+- Agent 流式输出期间单击 Esc：立即取消当前流式响应
+- 用户输入期间 500ms 内双击 Esc：清空输入
+- 多行输入期间双击 Esc：丢弃整段内容并返回主提示符
 
 ### 系统提示词（v5）
 
