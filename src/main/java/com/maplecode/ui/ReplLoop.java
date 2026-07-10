@@ -1,6 +1,7 @@
 package com.maplecode.ui;
 
 import com.maplecode.agent.AgentConfig;
+import com.maplecode.agent.AgentEvent;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.command.*;
@@ -13,6 +14,7 @@ import com.maplecode.permission.PermissionMode;
 import com.maplecode.provider.ChatMessage;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
+import com.maplecode.provider.StreamChunk.StopReason;
 import com.maplecode.provider.TokenUsage;
 import com.maplecode.session.ChatSession;
 import com.maplecode.session.archive.SessionArchive;
@@ -23,6 +25,9 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public final class ReplLoop {
 
@@ -41,6 +46,7 @@ public final class ReplLoop {
     private final com.maplecode.memory.MemoryManager memoryManager;  // nullable
     private final StatusBar statusBar;  // nullable
     private final CommandRegistry cmdRegistry;
+    private final EscapeController escapeController;  // nullable
     private volatile TokenUsage lastTokenUsage;  // volatile 为防御性措施，当前 usageSink 和 updateStatusBar 均在主线程
 
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
@@ -48,7 +54,7 @@ public final class ReplLoop {
                     PermissionEngine engine, AgentConfig agentConfig,
                     SessionArchive sessionArchive, CompactCoordinator coord,
                     com.maplecode.memory.MemoryManager memoryManager, StatusBar statusBar,
-                    CommandRegistry cmdRegistry) {
+                    CommandRegistry cmdRegistry, EscapeController escapeController) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -63,6 +69,7 @@ public final class ReplLoop {
         this.memoryManager = memoryManager;
         this.statusBar = statusBar;
         this.cmdRegistry = cmdRegistry;
+        this.escapeController = escapeController;
         java.util.function.Consumer<com.maplecode.provider.TokenUsage> usageSink = coord != null
             ? u -> { printer.usage(u); coord.recordUsage(u); lastTokenUsage = u; }
             : u -> { printer.usage(u); lastTokenUsage = u; };
@@ -70,12 +77,12 @@ public final class ReplLoop {
                 usageSink, coord);
     }
 
-    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null, cmdRegistry=null）。 */
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null, cmdRegistry=null, escapeController=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
         this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig,
-             null, null, null, null, null);
+             null, null, null, null, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
@@ -114,7 +121,7 @@ public final class ReplLoop {
 
         @Override
         public void sendToAgent(String prompt) {
-            agent.run(prompt, printer);
+            runAgent(prompt);
         }
 
         @Override
@@ -163,6 +170,30 @@ public final class ReplLoop {
         public AgentConfig getAgentConfig() { return agentConfig; }
     }
 
+    private StopReason runAgent(String prompt) {
+        AtomicReference<StopReason> finalStop = new AtomicReference<>();
+        Consumer<AgentEvent> sink = event -> {
+            if (escapeController != null) {
+                if (event instanceof AgentEvent.IterationStart) {
+                    escapeController.startAgentStreaming(agent::cancel);
+                } else if (event instanceof AgentEvent.BatchStart
+                    || event instanceof AgentEvent.AgentStop) {
+                    escapeController.stopAgentStreaming();
+                }
+            }
+            if (event instanceof AgentEvent.AgentStop stop) {
+                finalStop.set(stop.reason());
+            }
+            printer.accept(event);
+        };
+        try {
+            agent.run(prompt, sink);
+        } finally {
+            if (escapeController != null) escapeController.stopAgentStreaming();
+        }
+        return finalStop.get();
+    }
+
     public void run() {
         printer.banner("MapleCode — 输入 /help 查看可用命令");
 
@@ -197,11 +228,8 @@ public final class ReplLoop {
                         printer.error("未知命令: /" + name + "。输入 /help 查看可用命令。");
                     }
                 } else {
-                    // 正常对话
-                    agent.run(trimmed, printer);
-
-                    // memory extract
-                    if (memoryManager != null) {
+                    StopReason stopReason = runAgent(trimmed);
+                    if (memoryManager != null && stopReason != StopReason.USER_CANCELLED) {
                         memoryManager.extractAsync(agent.session().recentMessages(20));
                     }
                 }
@@ -251,31 +279,26 @@ public final class ReplLoop {
         }
     }
 
-    private String readMultiline() {
-        String first;
-        try {
-            // 阻塞调用
-            first = reader.readLine("> ");
-        } catch (UserInterruptException e) {
-            throw e;
-        }
+    String readMultiline() {
+        String first = reader.readLine("> ");
         if (first == null) return null;
         if (!first.equals("\"\"\"")) return first;
-        StringBuilder sb = new StringBuilder();
-        while (true) {
-            String line;
-            try {
-                line = reader.readLine("... ");
-            } catch (UserInterruptException e) {
-                throw e;
+        if (escapeController != null) escapeController.beginMultiline();
+        try {
+            StringBuilder sb = new StringBuilder();
+            while (true) {
+                String line = reader.readLine("... ");
+                if (escapeController != null
+                    && escapeController.consumeMultilineAbort()) return "";
+                if (line == null) return null;
+                if (line.equals("\"\"\"")) break;
+                sb.append(line).append('\n');
             }
-            if (line == null) return null;
-            if (line.equals("\"\"\"")) break;
-            sb.append(line).append('\n');
+            if (!sb.isEmpty()) sb.setLength(sb.length() - 1);
+            return sb.toString();
+        } finally {
+            if (escapeController != null) escapeController.endMultiline();
         }
-        String result = sb.toString();
-        if (result.endsWith("\n")) result = result.substring(0, result.length() - 1);
-        return result;
     }
 
     private String formatRelativeTime(java.time.Instant instant) {

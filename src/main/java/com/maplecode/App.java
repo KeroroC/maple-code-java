@@ -42,6 +42,7 @@ import com.maplecode.tool.Tool;
 import com.maplecode.tool.ToolExecutor;
 import com.maplecode.tool.ToolRegistry;
 import com.maplecode.tool.WriteFileTool;
+import com.maplecode.ui.EscapeController;
 import com.maplecode.ui.ReplLoop;
 import com.maplecode.ui.StatusBar;
 import com.maplecode.ui.StreamPrinter;
@@ -211,6 +212,8 @@ public final class App {
             .terminal(terminal)
             .completer(new CommandCompleter(cmdRegistry))
             .build();
+        EscapeController escapeController = new EscapeController(reader);
+        escapeController.installInputBindings();
         HitlCheck hitlCheck = new HitlCheck(
             new JLineInputSource(reader),
             new PrintStreamOutputSink(System.out));
@@ -228,7 +231,7 @@ public final class App {
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
             reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar,
-            cmdRegistry);
+            cmdRegistry, escapeController);
         repl.run();
     }
 
