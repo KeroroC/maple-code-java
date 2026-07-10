@@ -62,14 +62,21 @@ REPL 内：
 | 命令 | 说明 |
 |---|---|
 | `"""` | 开启多行输入；单独一行 `"""` 结束 |
+| `/help [command]` | 显示命令帮助（别名：`/h`、`/?`） |
 | `/clear` | 清空消息历史 |
 | `/compact` | 手动压缩上下文（触发摘要 + offload） |
 | `/tools` | 列出可用工具（内置 + MCP） |
 | `/plan <query>` | 规划模式（只读工具，模型只分析不执行） |
 | `/do` | 执行上一条规划 |
-| `/cancel` | 取消当前执行 |
+| `/review [关注点]` | 审查当前 Git 变更 |
+| `/memory <list\|clear\|extract>` | 记忆管理 |
+| `/new` | 归档当前会话并清空 |
+| `/resume [id]` | 加载历史会话 |
+| `/status` | 显示当前状态（模型、token、模式、目录） |
 | `/mode [strict\|default\|permissive]` | 查看或切换权限模式 |
 | `/exit` 或 Ctrl+D | 退出 |
+
+**Esc 键：** Agent 流式输出期间单击 Esc 取消当前响应；输入期间 500ms 内双击 Esc 清空输入；多行输入期间双击 Esc 丢弃整段内容。
 
 ## 工具系统
 
@@ -155,7 +162,17 @@ memory:
   max_context_messages: 10          # 提取时看最近几条消息（默认 10）
 ```
 
-记忆按 scope 分为 `user`（跨项目）和 `project`（当前项目），存储在 `~/.maplecode/memory/` 下。
+记忆按 scope 分为 `user`（跨项目）和 `project`（当前项目），存储在 `~/.maplecode/memory/`下。用 `/memory list` 查看、`/memory clear` 清空、`/memory extract` 手动触发提取。
+
+## 会话归档
+
+`/new` 将当前会话归档后清空，`/resume` 列出历史会话供选择恢复。归档存储在 `~/.maplecode/sessions/` 下。
+
+```yaml
+session_archive:
+  enabled: true
+  max_sessions: 50            # 最多保留几个归档（默认 50）
+```
 
 ## 权限系统
 
@@ -210,9 +227,11 @@ mvn test
 - **MCP 客户端**：stdio / http 双 transport，工具自动注册到 `ToolRegistry`
 - **上下文管理**：`CompactCoordinator` 自动摘要 + offload，token 估算驱动
 - **记忆系统**：`MemoryManager` + `MemoryExtractor`，跨会话知识积累
+- **会话归档**：`SessionArchive` + `SessionWriter` / `SessionReader`，`/new` 归档 + `/resume` 恢复
+- **命令框架**：`Command` 接口 + `CommandRegistry` + `CommandCompleter`，13 个内置斜杠命令
 - **流式解析**：`StreamChunk` sealed 接口，支持文本、思考、工具调用三种 chunk 类型
 - **会话管理**：`ChatSession` 管理对话历史，支持 `ContentBlock` 多内容类型
-- **REPL**：JLine 3 驱动的交互式命令行，支持多行输入和斜杠命令
+- **REPL**：JLine 3 驱动的交互式命令行，`StatusBar` 底部状态栏 + `EscapeController` 按键管理
 
 ### 设计文档
 
@@ -226,3 +245,6 @@ mvn test
 - `docs/superpowers/specs/2026-07-08-maple-code-agents-md-loader-design.md` —— v7.1 AGENTS.md 加载器
 - `docs/superpowers/specs/2026-07-08-maple-code-memory-design.md` —— v7.2 记忆系统
 - `docs/superpowers/specs/2026-07-08-maple-code-session-archive-design.md` —— v7.3 会话归档
+- `docs/superpowers/specs/2026-07-09-maple-code-command-framework-design.md` —— v7.4 命令框架
+- `docs/superpowers/specs/2026-07-09-maple-code-tui-status-bar-design.md` —— v7.5 TUI 状态栏
+- `docs/superpowers/specs/2026-07-10-maple-code-escape-controls-design.md` —— v7.6 Escape 控制
