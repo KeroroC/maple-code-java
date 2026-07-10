@@ -17,8 +17,6 @@ public final class OpenAiProvider implements LlmProvider {
     private final AppConfig config;
     private final HttpClient httpClient;
     private final OpenAiRequestMapper mapper = new OpenAiRequestMapper();
-    private final OpenAiStreamParser parser = new OpenAiStreamParser();
-    private final SseStreamReader sseReader = new SseStreamReader();
 
     public OpenAiProvider(AppConfig config) {
         this(config, HttpClient.newBuilder()
@@ -45,8 +43,8 @@ public final class OpenAiProvider implements LlmProvider {
             throw new ProviderException(
                 "OpenAI returned HTTP " + resp.statusCode() + ": " + body);
         }
-        parser.reset();
-        sseReader.read(resp, ev -> parser.feed(ev, sink));
+        var parser = new OpenAiStreamParser();
+        new SseStreamReader().read(resp, ev -> parser.feed(ev, sink));
         parser.finish(sink);
     }
 

@@ -17,8 +17,6 @@ public final class AnthropicProvider implements LlmProvider {
     private final AppConfig config;
     private final HttpClient httpClient;
     private final AnthropicRequestMapper mapper = new AnthropicRequestMapper();
-    private final AnthropicStreamParser parser = new AnthropicStreamParser();
-    private final SseStreamReader sseReader = new SseStreamReader();
 
     public AnthropicProvider(AppConfig config) {
         this(config, HttpClient.newBuilder()
@@ -46,8 +44,8 @@ public final class AnthropicProvider implements LlmProvider {
             throw new ProviderException(
                 "Anthropic returned HTTP " + resp.statusCode() + ": " + body);
         }
-        parser.reset();
-        sseReader.read(resp, ev -> parser.feed(ev, sink));
+        var parser = new AnthropicStreamParser();
+        new SseStreamReader().read(resp, ev -> parser.feed(ev, sink));
     }
 
     private String readBodyForError(HttpResponse<java.util.stream.Stream<String>> resp) {
