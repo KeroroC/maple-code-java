@@ -68,6 +68,15 @@ public final class IncludeResolver {
                         lastEnd = m.end();
                         continue;
                     }
+                    long fileSize = Files.size(target);
+                    if (fileSize > limits.maxFileSize()) {
+                        System.err.println("[agents-md] {{include: " + includePath + "}} at "
+                            + currentDir + ":" + lineInfo + ": file too large: "
+                            + fileSize + " bytes (max " + limits.maxFileSize() + ")");
+                        out.append(m.group(0));
+                        lastEnd = m.end();
+                        continue;
+                    }
                     String subContent = Files.readString(target);
                     Set<Path> nextVisited = new HashSet<>(visited);
                     nextVisited.add(target);

@@ -174,4 +174,21 @@ class IncludeResolverTest {
         assertEquals("X real content Y", result,
             "仓库内 symlink 应该被正常展开");
     }
+
+    @Test
+    void oversizedIncludeIsRejected() throws IOException {
+        // 写一个超 maxFileSize(1MB) 的 include 目标
+        Path big = tmp.resolve("big.md");
+        byte[] data = new byte[1_048_577];
+        Files.write(big, data);
+
+        Path main = tmp.resolve("main.md");
+        Files.writeString(main, "X {{include: big.md}} Y");
+
+        String result = IncludeResolver.resolve(
+            Files.readString(main), tmp, new HashSet<>(), 0, IncludeLimits.defaults());
+
+        assertTrue(result.contains("{{include: big.md}}"),
+            "超大文件的占位应保留原文，实际：" + result);
+    }
 }
