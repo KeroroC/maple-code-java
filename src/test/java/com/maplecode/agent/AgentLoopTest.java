@@ -58,22 +58,71 @@ class AgentLoopTest {
     }
 
     @Test
-    void cancelBeforeRunEmitsUserCancelled() {
-        var provider = new FakeLlmProvider(List.of(
-            List.<StreamChunk>of(new StreamChunk.MessageStart(),
-                new StreamChunk.MessageEnd(StopReason.END_TURN, null))));
+    void cancelDuringStreamStopsLaterTextAndResetsForNextRun() {
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var agentRef = new java.util.concurrent.atomic.AtomicReference<AgentLoop>();
+        LlmProvider provider = (req, sink) -> {
+            if (calls.incrementAndGet() == 1) {
+                sink.accept(new StreamChunk.TextDelta("before"));
+                agentRef.get().cancel();
+                sink.accept(new StreamChunk.TextDelta("after"));
+                sink.accept(new StreamChunk.MessageEnd(StopReason.END_TURN, null));
+            } else {
+                sink.accept(new StreamChunk.TextDelta("next"));
+                sink.accept(new StreamChunk.MessageEnd(StopReason.END_TURN, null));
+            }
+        };
         var registry = new ToolRegistry(List.of());
-        var executor = new ToolExecutor(registry);
         var session = new ChatSession();
-        var agent = new AgentLoop(provider, registry, executor, session, AgentConfig.defaults(), null);
-        agent.cancel();
+        var agent = new AgentLoop(provider, registry, new ToolExecutor(registry),
+            session, AgentConfig.defaults(), null);
+        agentRef.set(agent);
+
+        var first = new ArrayList<AgentEvent>();
+        agent.run("first", first::add);
+        assertEquals(StopReason.USER_CANCELLED, first.stream()
+            .filter(AgentEvent.AgentStop.class::isInstance)
+            .map(AgentEvent.AgentStop.class::cast)
+            .findFirst().orElseThrow().reason());
+        assertTrue(first.stream()
+            .filter(AgentEvent.TextDelta.class::isInstance)
+            .map(AgentEvent.TextDelta.class::cast)
+            .noneMatch(e -> e.text().equals("after")));
+        assertEquals(1, session.size());
+
+        var second = new ArrayList<AgentEvent>();
+        agent.run("second", second::add);
+        assertEquals(2, calls.get());
+        assertTrue(second.stream()
+            .filter(AgentEvent.TextDelta.class::isInstance)
+            .map(AgentEvent.TextDelta.class::cast)
+            .anyMatch(e -> e.text().equals("next")));
+    }
+
+    @Test
+    void cancelAfterToolResponsePreventsToolExecution() {
+        var agentRef = new java.util.concurrent.atomic.AtomicReference<AgentLoop>();
+        LlmProvider provider = (req, sink) -> {
+            sink.accept(new StreamChunk.ToolUseStart("t1", "read_file"));
+            sink.accept(new StreamChunk.ToolUseEnd("t1", "read_file",
+                new ObjectMapper().createObjectNode()));
+            sink.accept(new StreamChunk.MessageEnd(StopReason.TOOL_USE, null));
+            agentRef.get().cancel();
+        };
+        var tool = new RecordingTool("read_file", ToolResult.ok("content"));
+        var registry = new ToolRegistry(List.of(tool));
+        var agent = new AgentLoop(provider, registry, new ToolExecutor(registry),
+            new ChatSession(), AgentConfig.defaults(), null);
+        agentRef.set(agent);
 
         var events = new ArrayList<AgentEvent>();
-        agent.run("hi", events::add);
+        agent.run("read", events::add);
 
-        var stop = (AgentEvent.AgentStop) events.stream()
-            .filter(e -> e instanceof AgentEvent.AgentStop).findFirst().orElseThrow();
-        assertEquals(StopReason.USER_CANCELLED, stop.reason());
+        assertEquals(0, tool.calls().size());
+        assertEquals(StopReason.USER_CANCELLED, events.stream()
+            .filter(AgentEvent.AgentStop.class::isInstance)
+            .map(AgentEvent.AgentStop.class::cast)
+            .findFirst().orElseThrow().reason());
     }
 
     @Test

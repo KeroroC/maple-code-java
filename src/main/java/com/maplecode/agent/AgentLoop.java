@@ -18,6 +18,7 @@ import com.maplecode.tool.ToolResult;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 
 public final class AgentLoop {
@@ -60,7 +61,7 @@ public final class AgentLoop {
     }
 
     public void cancel() {
-        cancelled = true;
+        if (running) cancelled = true;
     }
 
     /**
@@ -79,6 +80,7 @@ public final class AgentLoop {
     }
 
     public void run(String userInput, Consumer<AgentEvent> sink) {
+        cancelled = false;
         running = true;
         try {
             runInternal(userInput, sink);
@@ -156,9 +158,22 @@ public final class AgentLoop {
             }
 
             try {
-                provider.stream(req, col);
+                provider.stream(req, chunk -> {
+                    if (cancelled) throw new CancellationException("agent cancelled");
+                    col.accept(chunk);
+                });
+            } catch (CancellationException e) {
+                sink.accept(new AgentEvent.AgentStop(
+                    StopReason.USER_CANCELLED, "user cancelled"));
+                return;
             } catch (ProviderException e) {
-                sink.accept(new AgentEvent.AgentStop(StopReason.PROVIDER_ERROR, e.getMessage()));
+                sink.accept(new AgentEvent.AgentStop(
+                    StopReason.PROVIDER_ERROR, e.getMessage()));
+                return;
+            }
+            if (cancelled) {
+                sink.accept(new AgentEvent.AgentStop(
+                    StopReason.USER_CANCELLED, "user cancelled"));
                 return;
             }
 
