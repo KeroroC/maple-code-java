@@ -13,6 +13,8 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public final class OpenAiRequestMapper {
@@ -56,8 +58,9 @@ public final class OpenAiRequestMapper {
                 }
             }
             for (var m : req.messages()) {
-                ObjectNode om = encodeMessage(m);
-                if (om != null) msgs.add(om);
+                for (ObjectNode om : encodeMessages(m)) {
+                    msgs.add(om);
+                }
             }
 
             // tools 数组 —— Task 18 完整实现
@@ -80,37 +83,44 @@ public final class OpenAiRequestMapper {
     }
 
     /**
-     * OpenAI 编码方式：
+     * OpenAI 编码方式（一条内部 ChatMessage 可能展开为多条 OpenAI 消息）：
      * - USER + TextBlock  → role=user, content=string
-     * - USER + ToolResultBlock → role=tool, content=string, tool_call_id=...
+     * - USER + ToolResultBlock(s) → 每个 ToolResultBlock 独立编码为 role=tool 消息
      * - ASSISTANT + TextBlock → role=assistant, content=string
      * - ASSISTANT + ToolUseBlock → role=assistant, content=null, tool_calls=[{id,type:function,function:{name,arguments}}]
      *
-     * 返回 null 表示该消息应当跳过（不该发生的边界情况）。
+     * 返回空列表表示该消息应当跳过（不该发生的边界情况）。
      */
-    private ObjectNode encodeMessage(ChatMessage m) {
-        ObjectNode msg = JSON.createObjectNode();
+    private List<ObjectNode> encodeMessages(ChatMessage m) {
         var blocks = m.blocks();
 
         if (m.role() == ChatMessage.Role.USER) {
-            // 检查是不是 tool_result
-            if (blocks.size() == 1 && blocks.get(0) instanceof ContentBlock.ToolResultBlock tr) {
-                msg.put("role", "tool");
-                msg.put("content", tr.content());
-                msg.put("tool_call_id", tr.toolUseId());
-                return msg;
+            // 检查是不是 tool_result（可能有多个）
+            if (!blocks.isEmpty() && blocks.stream().allMatch(b -> b instanceof ContentBlock.ToolResultBlock)) {
+                var result = new ArrayList<ObjectNode>();
+                for (var b : blocks) {
+                    ContentBlock.ToolResultBlock tr = (ContentBlock.ToolResultBlock) b;
+                    ObjectNode msg = JSON.createObjectNode();
+                    msg.put("role", "tool");
+                    msg.put("content", tr.content());
+                    msg.put("tool_call_id", tr.toolUseId());
+                    result.add(msg);
+                }
+                return result;
             }
             // 普通 user 消息：拼接 TextBlock 为 string
+            ObjectNode msg = JSON.createObjectNode();
             msg.put("role", "user");
             StringBuilder sb = new StringBuilder();
             for (var b : blocks) {
                 if (b instanceof ContentBlock.TextBlock tb) sb.append(tb.text());
             }
             msg.put("content", sb.toString());
-            return msg;
+            return List.of(msg);
         }
 
         // ASSISTANT
+        ObjectNode msg = JSON.createObjectNode();
         msg.put("role", "assistant");
         StringBuilder textBuf = new StringBuilder();
         ArrayNode toolCalls = null;
@@ -129,6 +139,6 @@ public final class OpenAiRequestMapper {
         }
         if (textBuf.length() > 0) msg.put("content", textBuf.toString());
         else msg.putNull("content");
-        return msg;
+        return List.of(msg);
     }
 }

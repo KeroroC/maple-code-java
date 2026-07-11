@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAiRequestMapperToolTest {
@@ -77,5 +78,51 @@ class OpenAiRequestMapperToolTest {
         assertTrue(body.contains("\"role\":\"tool\""), body);
         assertTrue(body.contains("\"content\":\"file contents\""), body);
         assertTrue(body.contains("\"tool_call_id\":\"call_1\""), body);
+    }
+
+    @Test
+    void multiple_tool_results_become_separate_role_tool_messages() throws Exception {
+        var req = new ChatRequest("m", List.of(),
+            List.of(new ChatMessage(ChatMessage.Role.USER,
+                List.of(
+                    new ContentBlock.ToolResultBlock("call_1", "result_1", false),
+                    new ContentBlock.ToolResultBlock("call_2", "result_2", true),
+                    new ContentBlock.ToolResultBlock("call_3", "result_3", false)
+                ))),
+            null, null);
+        JsonNode root = JSON.readTree(mapper.toJsonBody(req));
+        var msgs = root.path("messages");
+
+        // 三个 ToolResultBlock 应展开为三条 role=tool 消息
+        assertEquals(3, msgs.size(), "three tool results must produce three messages");
+        for (int i = 0; i < 3; i++) {
+            assertEquals("tool", msgs.get(i).path("role").asText(),
+                "message " + i + " must have role=tool");
+        }
+        assertEquals("call_1", msgs.get(0).path("tool_call_id").asText());
+        assertEquals("result_1", msgs.get(0).path("content").asText());
+        assertEquals("call_2", msgs.get(1).path("tool_call_id").asText());
+        assertEquals("result_2", msgs.get(1).path("content").asText());
+        assertEquals("call_3", msgs.get(2).path("tool_call_id").asText());
+        assertEquals("result_3", msgs.get(2).path("content").asText());
+    }
+
+    @Test
+    void mixed_text_and_tool_result_in_user_message() throws Exception {
+        // 理论上 AgentLoop 不会产生这种消息，但 mapper 应该容错
+        var req = new ChatRequest("m", List.of(),
+            List.of(new ChatMessage(ChatMessage.Role.USER,
+                List.of(
+                    new ContentBlock.TextBlock("some text"),
+                    new ContentBlock.ToolResultBlock("call_1", "result", false)
+                ))),
+            null, null);
+        JsonNode root = JSON.readTree(mapper.toJsonBody(req));
+        var msgs = root.path("messages");
+
+        // 混合内容走普通 user 分支（只拼 TextBlock）
+        assertEquals(1, msgs.size());
+        assertEquals("user", msgs.get(0).path("role").asText());
+        assertEquals("some text", msgs.get(0).path("content").asText());
     }
 }
