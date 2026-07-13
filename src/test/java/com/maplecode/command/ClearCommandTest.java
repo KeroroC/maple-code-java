@@ -1,6 +1,7 @@
 package com.maplecode.command;
 
 import com.maplecode.session.ChatSession;
+import com.maplecode.skill.SkillRegistry;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -16,9 +17,11 @@ class ClearCommandTest {
         CommandContext ctx = mock(CommandContext.class);
         when(ctx.getSession()).thenReturn(session);
 
-        new ClearCommand(null).execute("", ctx);
+        SkillRegistry skillRegistry = mock(SkillRegistry.class);
+        new ClearCommand(null, skillRegistry).execute("", ctx);
 
         assertEquals(0, session.size());
         verify(ctx).updateStatusBar();
+        verify(skillRegistry).deactivateAll();
     }
 }

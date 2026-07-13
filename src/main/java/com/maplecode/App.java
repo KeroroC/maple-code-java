@@ -33,6 +33,13 @@ import com.maplecode.prompt.PromptAssembler;
 import com.maplecode.prompt.SectionContext;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.ProviderRegistry;
+import com.maplecode.skill.ActivatedSkillsSection;
+import com.maplecode.skill.LoadSkillTool;
+import com.maplecode.skill.SkillCommand;
+import com.maplecode.skill.SkillDef;
+import com.maplecode.skill.SkillLoader;
+import com.maplecode.skill.SkillRegistry;
+import com.maplecode.skill.SkillWhitelistCheck;
 import com.maplecode.tool.EditFileTool;
 import com.maplecode.tool.ExecTool;
 import com.maplecode.tool.GlobTool;
@@ -119,6 +126,32 @@ public final class App {
             }).toList();
         List<Tool> allTools = new ArrayList<>(builtins);
         allTools.addAll(mcpTools);
+
+        // === Skill 系统装配 ===
+        Path userHome = Paths.get(System.getProperty("user.home"));
+        SkillLoader skillLoader = new SkillLoader();
+        Map<String, SkillDef> skills = skillLoader.loadAll(cwd, userHome);
+
+        // 验证工具白名单
+        java.util.Set<String> availableToolNames = allTools.stream()
+            .map(Tool::name)
+            .collect(java.util.stream.Collectors.toSet());
+        skills.values().forEach(s -> {
+            try {
+                skillLoader.validateTools(s, availableToolNames);
+            } catch (IllegalArgumentException e) {
+                System.err.println("[skill] ERROR: " + e.getMessage());
+                System.exit(78);
+            }
+        });
+
+        // 创建 SkillRegistry
+        SkillRegistry skillRegistry = new SkillRegistry(skills);
+
+        // 创建 LoadSkillTool 并注册到工具列表
+        LoadSkillTool loadSkillTool = new LoadSkillTool(skillRegistry);
+        allTools.add(loadSkillTool);
+
         ToolRegistry registry = new ToolRegistry(allTools);
 
         // 权限引擎
@@ -178,8 +211,12 @@ public final class App {
             memoryManager = new MemoryManager(memoryCfg, provider, memoryStore, raw.model());
             Runtime.getRuntime().addShutdownHook(new Thread(memoryManager::close, "memory-shutdown"));
         }
+
+        // v8 Skill 系统
+        ActivatedSkillsSection skillsSection = new ActivatedSkillsSection(skillRegistry);
+
         var sections = DefaultSections.standard(env, tools, PlanMode.NORMAL,
-            raw.yamlPrompt(), agentsMd, memoryContent);
+            raw.yamlPrompt(), agentsMd, memoryContent, skillsSection);
         var sectionCtx = new SectionContext(tools, env, PlanMode.NORMAL);
         var blocks = new PromptAssembler().assemble(sections, sectionCtx);
 
@@ -190,7 +227,7 @@ public final class App {
 
         // 命令注册
         CommandRegistry cmdRegistry = createCommandRegistry(
-            registry, sessionArchive, coord, memoryManager);
+            registry, sessionArchive, coord, memoryManager, skillRegistry);
 
         // 创建带有CommandCompleter的LineReader
         var reader = org.jline.reader.LineReaderBuilder.builder()
@@ -202,9 +239,14 @@ public final class App {
         HitlCheck hitlCheck = new HitlCheck(
             new JLineInputSource(reader),
             new PrintStreamOutputSink(System.out));
+
+        // Skill 工具白名单检查
+        SkillWhitelistCheck skillWhitelistCheck = new SkillWhitelistCheck(skillRegistry);
+
         PermissionEngine engine = new PermissionEngine(
             List.of(
                 new BlacklistCheck(),
+                skillWhitelistCheck,
                 new SandboxCheck(cwd),
                 new RuleCheck(ruleSet),
                 new ModeCheck(),
@@ -222,19 +264,21 @@ public final class App {
 
     static CommandRegistry createCommandRegistry(
             ToolRegistry tools, SessionArchive archive,
-            CompactCoordinator coord, MemoryManager memoryManager) {
+            CompactCoordinator coord, MemoryManager memoryManager,
+            SkillRegistry skillRegistry) {
         CommandRegistry commands = new CommandRegistry();
-        commands.register(new ClearCommand(coord));
+        commands.register(new ClearCommand(coord, skillRegistry));
         commands.register(new CompactCommand(coord));
         commands.register(new DoCommand());
         commands.register(new ExitCommand());
         commands.register(new HelpCommand(commands));
         if (memoryManager != null) commands.register(new MemoryCommand(memoryManager));
         commands.register(new ModeCommand());
-        commands.register(new NewCommand(archive, coord));
+        commands.register(new NewCommand(archive, coord, skillRegistry));
         commands.register(new PlanCommand());
         commands.register(new ResumeCommand(archive));
         commands.register(new ReviewCommand());
+        commands.register(new SkillCommand(skillRegistry));
         commands.register(new StatusCommand());
         commands.register(new ToolsCommand(tools));
         return commands;

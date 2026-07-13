@@ -77,3 +77,31 @@ mcp_servers:
 #   enabled: true
 #   memory_model: claude-haiku-4-5    # 记忆提取用模型（可选，默认复用主模型）
 #   max_context_messages: 10          # 提取时看最近几条消息（默认 10）
+
+# ===== v8 Skill 系统 =====
+
+# Skill 文件存放目录（三级优先级：项目 > 用户 > 内置）：
+#   .maplecode/skills/          # 项目级（最高优先级）
+#   ~/.maplecode/skills/        # 用户级
+#   内置资源                     # 最低优先级（commit, review, test）
+#
+# Skill 文件格式（YAML frontmatter + Markdown 正文）：
+#   ---
+#   name: my-skill
+#   description: 一句话说明
+#   tools: [exec, read_file]     # 工具白名单（可选，为空则不限制）
+#   mode: shared                 # 执行模式：shared（共享对话）| independent（独立执行）
+#   history_depth: 5             # independent 模式下带多少历史（可选）
+#   model: claude-haiku-4-5      # 指定模型（可选）
+#   ---
+#   # Skill 指令
+#   这里是发给模型的 SOP 指令...
+#   {{input}}                    # 用户输入的占位符
+#
+# 使用方式：
+#   /skill list                  # 列出所有可用 Skills
+#   /skill activate <name>       # 激活 Skill
+#   /skill deactivate <name>     # 停用 Skill
+#   /skill info <name>           # 查看 Skill 详情
+#
+# 模型也可以通过 load_skill 工具自动加载 Skill。

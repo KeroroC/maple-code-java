@@ -25,7 +25,7 @@ class DefaultSectionsTest {
         var sections = DefaultSections.standard(
             new DynamicContext(Path.of("/tmp"), false,
                 "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now()),
-            List.of(), PlanMode.NORMAL, null, null, null);
+            List.of(), PlanMode.NORMAL, null, null, null, null);
         assertEquals(10, sections.size(),
             "应当恰好 10 个固定段：identity/constraints/task/action/tool/tone/text/agents_md/memory/env");
         for (var s : sections) {
@@ -40,7 +40,7 @@ class DefaultSectionsTest {
     void environmentIsCacheableFalse() {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
-        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null, null);
+        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null, null, null);
         var envSection = sections.stream()
             .filter(s -> "environment".equals(s.kind()))
             .findFirst().orElseThrow();
@@ -53,7 +53,7 @@ class DefaultSectionsTest {
     void taskModeVariesByPlanMode() {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
-        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null, null);
+        var sections = DefaultSections.standard(env, List.of(), PlanMode.NORMAL, null, null, null, null);
         var taskMode = sections.get(2);
         assertEquals("task_mode", taskMode.kind());
         assertNotEquals(taskMode.render(ctx(PlanMode.NORMAL)),
@@ -65,9 +65,9 @@ class DefaultSectionsTest {
         var env = new DynamicContext(Path.of("/tmp"), false,
             "x", "x", "x", LocalDate.now(), LocalDate.now().getDayOfWeek(), LocalTime.now());
         var nullCustom = DefaultSections.standard(env, List.of(),
-            PlanMode.NORMAL, null, null, null);
+            PlanMode.NORMAL, null, null, null, null);
         var withCustom = DefaultSections.standard(env, List.of(),
-            PlanMode.NORMAL, "做且只做单元测试", null, null);
+            PlanMode.NORMAL, "做且只做单元测试", null, null, null);
         assertEquals(10, nullCustom.size());
         assertEquals(11, withCustom.size());
         assertEquals("custom_instruction", withCustom.get(10).kind());

@@ -22,7 +22,7 @@ class DefaultSectionsAgentsTest {
     @Test
     void agentsMdSectionIsBetweenTextOutputAndEnvironment() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "rules", null);
+            PlanMode.NORMAL, null, "rules", null, null);
 
         // 找到 agents_md 段
         var agentsMd = sections.stream()
@@ -48,7 +48,7 @@ class DefaultSectionsAgentsTest {
     @Test
     void emptyAgentsMdStillProducesSection() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, null, null);
+            PlanMode.NORMAL, null, null, null, null);
         var agentsMd = sections.stream()
             .filter(s -> "agents_md".equals(s.kind()))
             .findFirst()
@@ -60,7 +60,7 @@ class DefaultSectionsAgentsTest {
     @Test
     void nonEmptyAgentsMdRendersContent() {
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "Use Java 21.\nAvoid global state.", null);
+            PlanMode.NORMAL, null, "Use Java 21.\nAvoid global state.", null, null);
         var agentsMd = sections.stream()
             .filter(s -> "agents_md".equals(s.kind()))
             .findFirst()

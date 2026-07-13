@@ -49,7 +49,8 @@ public final class DefaultSections {
 
     public static List<PromptSection> standard(DynamicContext env, List<Tool> tools,
                                                PlanMode planMode, String customInstruction,
-                                               String agentsMd, String memoryContent) {
+                                               String agentsMd, String memoryContent,
+                                               PromptSection skillsSection) {
         // 当前设计的缓存命中率依赖这里的明确顺序，如果将ENVIRONMENT这样的动态内容放到TEXT_OUTPUT前面会导致缓存命中率几乎为0
         List<PromptSection> list = new ArrayList<>(List.of(
             IDENTITY, SYSTEM_CONSTRAINTS, TASK_MODE, ACTION_EXECUTION,
@@ -57,6 +58,9 @@ public final class DefaultSections {
             new AgentsMdSection(agentsMd),
             new MemorySection(memoryContent),   // v7.3 新增
             ENVIRONMENT));
+        if (skillsSection != null) {
+            list.add(skillsSection);  // v8 Skill 系统
+        }
         if (customInstruction != null && !customInstruction.isBlank()) {
             list.add(new CustomInstructionSection(customInstruction));
         }

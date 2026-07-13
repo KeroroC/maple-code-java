@@ -1,12 +1,15 @@
 package com.maplecode.command;
 
 import com.maplecode.compact.CompactCoordinator;
+import com.maplecode.skill.SkillRegistry;
 
 public class ClearCommand implements Command {
     private final CompactCoordinator coord;
+    private final SkillRegistry skillRegistry;
 
-    public ClearCommand(CompactCoordinator coord) {
+    public ClearCommand(CompactCoordinator coord, SkillRegistry skillRegistry) {
         this.coord = coord;
+        this.skillRegistry = skillRegistry;
     }
 
     @Override public String name() { return "clear"; }
@@ -20,6 +23,9 @@ public class ClearCommand implements Command {
         ctx.getSession().clear();
         if (coord != null) {
             coord.recordUsage(null);
+        }
+        if (skillRegistry != null) {
+            skillRegistry.deactivateAll();
         }
         ctx.updateStatusBar();
     }

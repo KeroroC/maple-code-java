@@ -23,7 +23,7 @@ class PromptAssemblerAgentsTest {
     void cacheBoundaryFallsAfterAgentsMdOrAtCustomInstructionTail() {
         // 不带 customInstruction：cacheBoundary 应在 agents_md 段（最后一个 cacheable 段）
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, null, "rules", null);
+            PlanMode.NORMAL, null, "rules", null, null);
         var blocks = new PromptAssembler().assemble(sections,
             new SectionContext(List.of(), env(), PlanMode.NORMAL));
 
@@ -47,7 +47,7 @@ class PromptAssemblerAgentsTest {
     void cacheBoundaryFallsAtCustomInstructionWhenPresent() {
         // 带 customInstruction：cacheBoundary 应在 custom_instruction（更后的 cacheable）
         var sections = DefaultSections.standard(env(), List.of(),
-            PlanMode.NORMAL, "做且只做单元测试", "rules", null);
+            PlanMode.NORMAL, "做且只做单元测试", "rules", null, null);
         var blocks = new PromptAssembler().assemble(sections,
             new SectionContext(List.of(), env(), PlanMode.NORMAL));
 
