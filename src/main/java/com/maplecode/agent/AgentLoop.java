@@ -4,8 +4,12 @@ import com.maplecode.compact.CompactCoordinator;
 import com.maplecode.compact.CompactResult;
 import com.maplecode.compact.CompactTrigger;
 import com.maplecode.error.ProviderException;
+import com.maplecode.prompt.DynamicContext;
 import com.maplecode.prompt.PlanModeReminder;
 import com.maplecode.prompt.PromptAssembler;
+import com.maplecode.prompt.PromptSection;
+import com.maplecode.prompt.SectionContext;
+import com.maplecode.prompt.SystemBlock;
 import com.maplecode.provider.ChatRequest;
 import com.maplecode.provider.ContentBlock;
 import com.maplecode.provider.LlmProvider;
@@ -30,13 +34,16 @@ public final class AgentLoop {
     private AgentConfig config;
     private final Consumer<TokenUsage> usageSink;
     private final CompactCoordinator coord;  // nullable
+    private final List<PromptSection> sections;  // nullable；非 null 时每轮 re-assemble 系统提示词
+    private final DynamicContext env;            // nullable；与 sections 配合使用
     private volatile boolean cancelled;
     private volatile boolean running = false;
 
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
                      AgentConfig config, Consumer<TokenUsage> usageSink,
-                     CompactCoordinator coord) {
+                     CompactCoordinator coord,
+                     List<PromptSection> sections, DynamicContext env) {
         this.provider = provider;
         this.registry = registry;
         this.executor = executor;
@@ -44,20 +51,30 @@ public final class AgentLoop {
         this.config = config;
         this.usageSink = usageSink;
         this.coord = coord;
+        this.sections = sections;
+        this.env = env;
     }
 
-    /** 6 参重载（coord=null），保留调用兼容性。 */
+    /** 7 参重载（sections=null, env=null），保留调用兼容性。 */
+    public AgentLoop(LlmProvider provider, ToolRegistry registry,
+                     ToolExecutor executor, ChatSession session,
+                     AgentConfig config, Consumer<TokenUsage> usageSink,
+                     CompactCoordinator coord) {
+        this(provider, registry, executor, session, config, usageSink, coord, null, null);
+    }
+
+    /** 6 参重载（coord=null, sections=null, env=null），保留调用兼容性。 */
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
                      AgentConfig config, Consumer<TokenUsage> usageSink) {
-        this(provider, registry, executor, session, config, usageSink, null);
+        this(provider, registry, executor, session, config, usageSink, null, null, null);
     }
 
-    /** 5 参重载（usageSink=null, coord=null），保留测试路径。 */
+    /** 5 参重载（usageSink=null, coord=null, sections=null, env=null），保留测试路径。 */
     public AgentLoop(LlmProvider provider, ToolRegistry registry,
                      ToolExecutor executor, ChatSession session,
                      AgentConfig config) {
-        this(provider, registry, executor, session, config, null, null);
+        this(provider, registry, executor, session, config, null, null, null, null);
     }
 
     public void cancel() {
@@ -140,7 +157,16 @@ public final class AgentLoop {
             var tools = (config.planMode() == PlanMode.PLAN)
                 ? registry.readOnly()
                 : registry.all();
-            var sysBlocks = config.systemBlocks();
+
+            // 每轮重新 assemble 系统提示词（支持动态 section 如 activated_skills）
+            List<SystemBlock> sysBlocks;
+            if (sections != null && env != null) {
+                var currentCtx = new SectionContext(tools, env, config.planMode());
+                sysBlocks = new PromptAssembler().assemble(sections, currentCtx);
+                if (sysBlocks.isEmpty()) sysBlocks = config.systemBlocks();  // 防御性回退
+            } else {
+                sysBlocks = config.systemBlocks();
+            }
             var req = session.toRequest(config.model(), sysBlocks, config.thinking(), tools);
 
             // PLAN 模式下追加 reminder（不持久化到 session）

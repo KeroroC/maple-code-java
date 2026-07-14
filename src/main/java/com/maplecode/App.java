@@ -258,7 +258,7 @@ public final class App {
 
         ReplLoop repl = new ReplLoop(raw, provider, new StreamPrinter(terminal),
             reader, registry, executor, engine, agentConfig, sessionArchive, coord, memoryManager, statusBar,
-            cmdRegistry, escapeController);
+            cmdRegistry, escapeController, sections, env);
         repl.run();
     }
 

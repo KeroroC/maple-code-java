@@ -2,11 +2,18 @@ package com.maplecode.agent;
 
 import com.maplecode.fake.FakeLlmProvider;
 import com.maplecode.fake.RecordingTool;
+import com.maplecode.prompt.DynamicContext;
 import com.maplecode.prompt.PlanModeReminder;
+import com.maplecode.prompt.PromptSection;
+import com.maplecode.prompt.SectionContext;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.StreamChunk;
 import com.maplecode.provider.StreamChunk.StopReason;
 import com.maplecode.session.ChatSession;
+import com.maplecode.skill.ActivatedSkillsSection;
+import com.maplecode.skill.ExecutionMode;
+import com.maplecode.skill.SkillDef;
+import com.maplecode.skill.SkillRegistry;
 import com.maplecode.tool.Tool;
 import com.maplecode.tool.ToolContext;
 import com.maplecode.tool.ToolExecutor;
@@ -16,8 +23,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -423,5 +432,59 @@ class AgentLoopTest {
         assertEquals(300, captured.get().outputTokens());
         assertEquals(100, captured.get().cacheCreationTokens());
         assertEquals(50, captured.get().cacheReadTokens());
+    }
+
+    @Test
+    void activatedSkillInjectedIntoSystemBlocksOnNextRun() {
+        // 准备：一个未激活的 skill
+        var skillDef = new SkillDef("test-skill", "A test skill", List.of(),
+            ExecutionMode.SHARED, 0, null, "Do the thing {{input}}", Path.of("test-skill.md"));
+        var skillRegistry = new SkillRegistry(Map.of("test-skill", skillDef));
+
+        // 构建 sections：包含 ActivatedSkillsSection + 一个静态段
+        var skillsSection = new ActivatedSkillsSection(skillRegistry);
+        PromptSection identitySection = new PromptSection() {
+            public String kind() { return "identity"; }
+            public String render(SectionContext ctx) { return "You are a test agent."; }
+            public boolean cacheable() { return true; }
+        };
+        List<PromptSection> sections = List.of(identitySection, skillsSection);
+        var env = DynamicContext.capture(Path.of("."));
+
+        // spy provider：捕获 ChatRequest
+        var capturedReqs = new java.util.concurrent.atomic.AtomicReference<com.maplecode.provider.ChatRequest>();
+        var endTurnChunks = List.<StreamChunk>of(
+            new StreamChunk.TextDelta("ok"),
+            new StreamChunk.MessageEnd(StopReason.END_TURN, null)
+        );
+        LlmProvider spyProvider = (req, sink) -> {
+            capturedReqs.set(req);
+            for (var c : endTurnChunks) sink.accept(c);
+        };
+
+        var registry = new ToolRegistry(List.of());
+        var executor = new ToolExecutor(registry);
+        var session = new ChatSession();
+        var agent = new AgentLoop(spyProvider, registry, executor, session,
+            AgentConfig.defaults(), null, null, sections, env);
+
+        // 第一次 run：skill 未激活
+        agent.run("hello", e -> {});
+        var req1 = capturedReqs.get();
+        assertNotNull(req1);
+        boolean hasSkill1 = req1.systemBlocks().stream()
+            .anyMatch(b -> b.content().contains("Do the thing"));
+        assertFalse(hasSkill1, "system blocks should NOT contain skill content before activation");
+
+        // 激活 skill
+        skillRegistry.activate(skillDef, "Do the thing with magic");
+
+        // 第二次 run：skill 已激活
+        agent.run("again", e -> {});
+        var req2 = capturedReqs.get();
+        assertNotNull(req2);
+        boolean hasSkill2 = req2.systemBlocks().stream()
+            .anyMatch(b -> b.content().contains("Do the thing with magic"));
+        assertTrue(hasSkill2, "system blocks SHOULD contain skill content after activation");
     }
 }

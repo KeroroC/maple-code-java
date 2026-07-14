@@ -5,6 +5,8 @@ import com.maplecode.agent.AgentEvent;
 import com.maplecode.agent.AgentLoop;
 import com.maplecode.agent.PlanMode;
 import com.maplecode.command.*;
+import com.maplecode.prompt.DynamicContext;
+import com.maplecode.prompt.PromptSection;
 import com.maplecode.compact.CompactCoordinator;
 import com.maplecode.compact.CompactResult;
 import com.maplecode.compact.CompactTrigger;
@@ -26,6 +28,7 @@ import org.jline.reader.UserInterruptException;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -54,7 +57,8 @@ public final class ReplLoop {
                     PermissionEngine engine, AgentConfig agentConfig,
                     SessionArchive sessionArchive, CompactCoordinator coord,
                     com.maplecode.memory.MemoryManager memoryManager, StatusBar statusBar,
-                    CommandRegistry cmdRegistry, EscapeController escapeController) {
+                    CommandRegistry cmdRegistry, EscapeController escapeController,
+                    List<PromptSection> sections, DynamicContext env) {
         this.appConfig = appConfig;
         this.provider = provider;
         this.printer = printer;
@@ -74,15 +78,26 @@ public final class ReplLoop {
             ? u -> { printer.usage(u); coord.recordUsage(u); lastTokenUsage = u; }
             : u -> { printer.usage(u); lastTokenUsage = u; };
         this.agent = new AgentLoop(provider, registry, executor, session, agentConfig,
-                usageSink, coord);
+                usageSink, coord, sections, env);
     }
 
-    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null, cmdRegistry=null, escapeController=null）。 */
+    /** 14 参数向后兼容构造器（sections=null, env=null）。 */
+    public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
+                    LineReader reader, ToolRegistry registry, ToolExecutor executor,
+                    PermissionEngine engine, AgentConfig agentConfig,
+                    SessionArchive sessionArchive, CompactCoordinator coord,
+                    com.maplecode.memory.MemoryManager memoryManager, StatusBar statusBar,
+                    CommandRegistry cmdRegistry, EscapeController escapeController) {
+        this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig,
+             sessionArchive, coord, memoryManager, statusBar, cmdRegistry, escapeController, null, null);
+    }
+
+    /** 8 参数向后兼容构造器（sessionArchive=null, coord=null, memoryManager=null, statusBar=null, cmdRegistry=null, escapeController=null, sections=null, env=null）。 */
     public ReplLoop(AppConfig appConfig, LlmProvider provider, StreamPrinter printer,
                     LineReader reader, ToolRegistry registry, ToolExecutor executor,
                     PermissionEngine engine, AgentConfig agentConfig) {
         this(appConfig, provider, printer, reader, registry, executor, engine, agentConfig,
-             null, null, null, null, null, null);
+             null, null, null, null, null, null, null, null);
     }
 
     public static ReplLoop fromConfig(AppConfig config, LlmProvider provider,
