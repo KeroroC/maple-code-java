@@ -39,7 +39,7 @@ public class IndependentSkillRunner {
      *
      * @param skill        Skill 定义
      * @param input        用户输入
-     * @param mainSession  主对话会话（用于提取历史）
+     * @param mainSession  主对话会话（用于提取历史），可为 null
      * @return 执行结果文本
      */
     public String run(SkillDef skill, String input, ChatSession mainSession) {
@@ -65,7 +65,7 @@ public class IndependentSkillRunner {
 
         // 5. 创建独立的 ChatSession，可选择带多少历史
         ChatSession independentSession = new ChatSession();
-        if (skill.historyDepth() > 0) {
+        if (skill.historyDepth() > 0 && mainSession != null) {
             List<ChatMessage> recent = mainSession.recentMessages(skill.historyDepth());
             for (ChatMessage msg : recent) {
                 if (msg.role() == ChatMessage.Role.USER) {

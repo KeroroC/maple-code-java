@@ -3,6 +3,7 @@ package com.maplecode.skill;
 import com.maplecode.command.Command;
 import com.maplecode.command.CommandContext;
 import com.maplecode.command.CommandType;
+import com.maplecode.session.ChatSession;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,9 +23,17 @@ import java.util.List;
 public class SkillCommand implements Command {
 
     private final SkillRegistry registry;
+    private IndependentSkillRunner runner;
 
     public SkillCommand(SkillRegistry registry) {
         this.registry = registry;
+    }
+
+    /**
+     * 设置独立模式运行器。在 App.main 装配阶段调用。
+     */
+    public void setRunner(IndependentSkillRunner runner) {
+        this.runner = runner;
     }
 
     @Override
@@ -143,7 +152,20 @@ public class SkillCommand implements Command {
             return;
         }
 
-        // 渲染 {{input}} 占位符
+        // 独立模式：直接执行并返回结果
+        if (def.mode() == ExecutionMode.INDEPENDENT) {
+            if (runner == null) {
+                ctx.sendError("独立执行模式未启用（runner 未注入）。");
+                return;
+            }
+            ChatSession session = ctx.getSession();
+            ctx.sendMessage("⏳ 正在独立执行 Skill '" + skillName + "'...");
+            String result = runner.run(def, input, session);
+            ctx.sendMessage(result);
+            return;
+        }
+
+        // 共享模式：渲染 {{input}} 占位符，注入到系统提示词
         String rendered = def.body().replace("{{input}}", input);
 
         // 激活 Skill

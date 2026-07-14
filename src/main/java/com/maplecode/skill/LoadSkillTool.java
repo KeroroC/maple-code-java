@@ -16,9 +16,17 @@ public class LoadSkillTool implements Tool {
     public static final String NAME = "load_skill";
 
     private final SkillRegistry registry;
+    private IndependentSkillRunner runner;
 
     public LoadSkillTool(SkillRegistry registry) {
         this.registry = registry;
+    }
+
+    /**
+     * 设置独立模式运行器。在 App.main 装配阶段调用。
+     */
+    public void setRunner(IndependentSkillRunner runner) {
+        this.runner = runner;
     }
 
     @Override
@@ -82,7 +90,16 @@ public class LoadSkillTool implements Tool {
         // 渲染 {{input}} 占位符
         String rendered = def.body().replace("{{input}}", input);
 
-        // 激活 Skill
+        // 独立模式：直接执行并返回结果
+        if (def.mode() == ExecutionMode.INDEPENDENT) {
+            if (runner == null) {
+                return ToolResult.error("独立执行模式未启用（runner 未注入）。");
+            }
+            String result = runner.run(def, input, null);
+            return ToolResult.ok("Skill '" + skillName + "' 独立执行完成。\n\n" + result);
+        }
+
+        // 共享模式：激活 Skill，注入到系统提示词
         registry.activate(def, rendered);
 
         String toolInfo = "";
@@ -91,9 +108,6 @@ public class LoadSkillTool implements Tool {
         }
 
         String modeInfo = " 执行模式: " + def.mode();
-        if (def.mode() == ExecutionMode.INDEPENDENT && def.historyDepth() > 0) {
-            modeInfo += " (带 " + def.historyDepth() + " 条历史)";
-        }
 
         return ToolResult.ok("Skill '" + skillName + "' 已激活。" + toolInfo + modeInfo +
                             " 完整指令已加载到系统提示词中。");

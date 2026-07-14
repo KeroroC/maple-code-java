@@ -34,6 +34,7 @@ import com.maplecode.prompt.SectionContext;
 import com.maplecode.provider.LlmProvider;
 import com.maplecode.provider.ProviderRegistry;
 import com.maplecode.skill.ActivatedSkillsSection;
+import com.maplecode.skill.IndependentSkillRunner;
 import com.maplecode.skill.LoadSkillTool;
 import com.maplecode.skill.SkillCommand;
 import com.maplecode.skill.SkillDef;
@@ -154,6 +155,10 @@ public final class App {
 
         ToolRegistry registry = new ToolRegistry(allTools);
 
+        // 独立模式 Skill 运行器
+        IndependentSkillRunner independentRunner = new IndependentSkillRunner(provider, registry, raw.model());
+        loadSkillTool.setRunner(independentRunner);
+
         // 权限引擎
         Path userPermFile = Paths.get(System.getProperty("user.home"), ".maplecode", "permissions.yaml");
         RuleSet ruleSet = PermissionFileLoader.loadAll(cwd, userPermFile);
@@ -227,7 +232,7 @@ public final class App {
 
         // 命令注册
         CommandRegistry cmdRegistry = createCommandRegistry(
-            registry, sessionArchive, coord, memoryManager, skillRegistry);
+            registry, sessionArchive, coord, memoryManager, skillRegistry, independentRunner);
 
         // 创建带有CommandCompleter的LineReader
         var reader = org.jline.reader.LineReaderBuilder.builder()
@@ -265,7 +270,7 @@ public final class App {
     static CommandRegistry createCommandRegistry(
             ToolRegistry tools, SessionArchive archive,
             CompactCoordinator coord, MemoryManager memoryManager,
-            SkillRegistry skillRegistry) {
+            SkillRegistry skillRegistry, IndependentSkillRunner independentRunner) {
         CommandRegistry commands = new CommandRegistry();
         commands.register(new ClearCommand(coord, skillRegistry));
         commands.register(new CompactCommand(coord));
@@ -278,7 +283,9 @@ public final class App {
         commands.register(new PlanCommand());
         commands.register(new ResumeCommand(archive));
         commands.register(new ReviewCommand());
-        commands.register(new SkillCommand(skillRegistry));
+        SkillCommand skillCommand = new SkillCommand(skillRegistry);
+        skillCommand.setRunner(independentRunner);
+        commands.register(skillCommand);
         commands.register(new StatusCommand());
         commands.register(new ToolsCommand(tools));
         return commands;

@@ -281,4 +281,42 @@ class SkillCommandTest {
 
         verify(ctx).sendMessage(contains("没有可用的 Skills"));
     }
+
+    @Test
+    void execute_activate_independentSkill_runsAndShowsResult() {
+        SkillDef skill = new SkillDef("my-skill", "My skill", List.of(),
+                                      ExecutionMode.INDEPENDENT, 0, null, "Body with {{input}}", Path.of("my-skill.md"));
+        SkillRegistry registry = new SkillRegistry(Map.of("my-skill", skill));
+
+        SkillCommand command = new SkillCommand(registry);
+        IndependentSkillRunner mockRunner = mock(IndependentSkillRunner.class);
+        when(mockRunner.run(any(), any(), any())).thenReturn("独立执行结果");
+        command.setRunner(mockRunner);
+
+        CommandContext ctx = mock(CommandContext.class);
+        when(ctx.getSession()).thenReturn(new com.maplecode.session.ChatSession());
+
+        command.execute("activate my-skill some input", ctx);
+
+        verify(mockRunner).run(eq(skill), eq("some input"), any());
+        verify(ctx, times(2)).sendMessage(contains("独立执行"));
+        assertFalse(registry.isActive("my-skill")); // 不应激活
+    }
+
+    @Test
+    void execute_activate_independentSkill_noRunner_showsError() {
+        SkillDef skill = new SkillDef("my-skill", "My skill", List.of(),
+                                      ExecutionMode.INDEPENDENT, 0, null, "Body", Path.of("my-skill.md"));
+        SkillRegistry registry = new SkillRegistry(Map.of("my-skill", skill));
+
+        SkillCommand command = new SkillCommand(registry);
+        // 不设置 runner
+
+        CommandContext ctx = mock(CommandContext.class);
+
+        command.execute("activate my-skill", ctx);
+
+        verify(ctx).sendError(contains("独立执行模式未启用"));
+        assertFalse(registry.isActive("my-skill"));
+    }
 }

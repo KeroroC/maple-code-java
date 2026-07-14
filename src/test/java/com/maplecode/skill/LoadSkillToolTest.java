@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class LoadSkillToolTest {
 
@@ -144,19 +145,42 @@ class LoadSkillToolTest {
     }
 
     @Test
-    void execute_independentMode_showsModeInfo() {
+    void execute_independentMode_callsRunnerAndReturnsResult() {
         SkillDef skill = new SkillDef("my-skill", "Desc", List.of(),
-                                      ExecutionMode.INDEPENDENT, 5, null, "Body", Path.of("test.md"));
+                                      ExecutionMode.INDEPENDENT, 5, null, "Body with {{input}}", Path.of("test.md"));
         SkillRegistry registry = new SkillRegistry(Map.of("my-skill", skill));
         LoadSkillTool tool = new LoadSkillTool(registry);
+
+        IndependentSkillRunner mockRunner = mock(IndependentSkillRunner.class);
+        when(mockRunner.run(any(), any(), any())).thenReturn("独立执行结果");
+        tool.setRunner(mockRunner);
+
+        ObjectNode args = mapper.createObjectNode();
+        args.put("skill_name", "my-skill");
+        args.put("input", "test input");
+        ToolResult result = tool.execute(args, ToolContext.defaults(Path.of(".")));
+
+        assertFalse(result.isError());
+        assertTrue(result.content().contains("独立执行完成"));
+        assertTrue(result.content().contains("独立执行结果"));
+        verify(mockRunner).run(eq(skill), eq("test input"), eq(null));
+        assertFalse(registry.isActive("my-skill")); // 不应激活
+    }
+
+    @Test
+    void execute_independentMode_noRunner_returnsError() {
+        SkillDef skill = new SkillDef("my-skill", "Desc", List.of(),
+                                      ExecutionMode.INDEPENDENT, 0, null, "Body", Path.of("test.md"));
+        SkillRegistry registry = new SkillRegistry(Map.of("my-skill", skill));
+        LoadSkillTool tool = new LoadSkillTool(registry);
+        // 不设置 runner
 
         ObjectNode args = mapper.createObjectNode();
         args.put("skill_name", "my-skill");
         ToolResult result = tool.execute(args, ToolContext.defaults(Path.of(".")));
 
-        assertFalse(result.isError());
-        assertTrue(result.content().contains("INDEPENDENT"));
-        assertTrue(result.content().contains("5 条历史"));
+        assertTrue(result.isError());
+        assertTrue(result.content().contains("独立执行模式未启用"));
     }
 
     @Test
