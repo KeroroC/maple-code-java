@@ -63,12 +63,12 @@ App.main
 
 核心抽象：
 
-- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`agents` 跨会话记忆加载器（v7.1）、`tool` 6 个内置 + `ToolExecutor`、`permission` 5 层 check + engine + HITL、`session` ChatSession + ContentBlock + `archive` 归档（v7.3）、`ui` REPL + StreamPrinter + StatusBar + EscapeController、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`compact` 压缩（v6）、`memory` 记忆系统（v7.2）、`command` 命令框架（v7.4，Command + CommandRegistry + CommandCompleter）、`util` 工具类、`error` 异常类型。
+- **包结构**（`com.maplecode.*`）：`config` 加载 + 校验、`provider`（anthropic / openai 子包）+ 通用 http、`agent` ReAct + PlanMode、`agents` 跨会话记忆加载器（v7.1）、`tool` 7 个内置（含 load_skill）+ `ToolExecutor`、`permission` 6 层 check（含 SkillWhitelistCheck）+ engine + HITL、`session` ChatSession + ContentBlock + `archive` 归档（v7.3）、`ui` REPL + StreamPrinter + StatusBar + EscapeController、`prompt` system prompt 装配（v5）、`mcp` 客户端 5 子包（transport/rpc/client/adapter/config，v5）、`compact` 压缩（v6）、`memory` 记忆系统（v7.2）、`command` 命令框架（v7.4，Command + CommandRegistry + CommandCompleter）、`skill` Skill 系统（v8，SkillRegistry + SkillLoader + ExecutionMode）、`util` 工具类、`error` 异常类型。
 - **`LlmProvider`** —— 唯一方法 `void stream(ChatRequest, Consumer<StreamChunk>)`。同步推送，没有回调/future。新增后端只需实现该接口并在 `ProviderRegistry.factories` 注册工厂。
 - **`StreamChunk`** —— sealed 接口（`TextDelta | ThinkingDelta | MessageStart | MessageEnd | Error | ToolUseStart | ToolUseDelta | ToolUseEnd`）+ `StopReason` 枚举（含 `TOOL_USE`）。sealed 层次结构保证新增 chunk 变体时所有 `switch` 必须更新。
 - **`ContentBlock`** —— sealed 接口（`TextBlock | ToolUseBlock | ToolResultBlock`），用于表示消息内容。ChatMessage 的 content 从 String 改为 `List<ContentBlock>`。
 - **`Tool`** —— 工具接口（非 sealed），定义 `name()`、`description()`、`inputSchema()`、`execute()` 方法。6 个内置工具：read_file、write_file、edit_file、exec、glob、grep。
-- **`ToolRegistry`** —— 工具注册中心，启动时合并 6 个内置工具 + 所有 MCP 工具；命名空间 `mcp__<server>__<tool>` 防冲突；构造期同名重复即抛错。`all()` 返回所有工具，`get(name)` 按名查找。
+- **`ToolRegistry`** —— 工具注册中心，启动时合并 7 个内置工具（含 load_skill）+ 所有 MCP 工具；命名空间 `mcp__<server>__<tool>` 防冲突；构造期同名重复即抛错。`all()` 返回所有工具，`get(name)` 按名查找。
 - **`ToolExecutor`** —— 工具执行器。先查 registry 找工具；再调 `engine.check(req)` 走权限管道（DENY → `ToolResult.error("权限拒绝: ...")`）；最后调 `tool.execute`。带完整错误兜底链：未知工具 → ToolException → 其他异常。单参构造器 `ToolExecutor(registry)` 跳过权限检查（PLAN mode 路径）。
 - **`SseStreamReader`** —— 协议无关。把按行流入的字节流切成 `SseEvent(eventType, data)`：多行 `data:` 按规范用 `\n` 拼接，注释/心跳丢弃。
 - **`ChatSession`** —— 一轮对话内只追加，并且只在成功时追加。用户消息在请求前追加；助手消息只在收到 `MessageEnd` 之后追加。如果流异常抛出，session 不动，用户可以重试。`/clear` 清空。
@@ -91,6 +91,7 @@ ToolExecutor.run()
   └─ BlacklistCheck     → 12 条硬编码 regex，仅 exec，不可配置
   └─ SandboxCheck       → 路径沙箱，toRealPath() 防 symlink 逃逸；exec 跳过
   └─ RuleCheck          → 三层 YAML 规则 first-match-wins；exec 用 shell glob，其他用 PathMatcher
+  └─ SkillWhitelistCheck → INDEPENDENT 模式下仅放行白名单工具；非 skill 上下文 pass-through
   └─ ModeCheck          → strict→deny / permissive→allow / default→未决
   └─ HitlCheck          → 弹 prompt 4 选 1：本次/本会话/本项目/拒绝
 ```
@@ -119,6 +120,7 @@ ToolExecutor.run()
 | `/help [command]` | 显示命令帮助 |
 | `/clear` | 清空 session 历史 |
 | `/compact` | 手动压缩上下文 |
+| `/skill [list\|load\|unload]` | 管理 Skill（列出、加载、卸载） |
 | `/tools` | 列出所有可用工具（内置 + MCP，含多行 description） |
 | `/plan <query>` | 规划模式：只读工具，模型只分析不执行 |
 | `/do` | 执行上一条规划 |
@@ -148,8 +150,17 @@ ToolExecutor.run()
 - **`Command`** —— 斜杠命令接口，定义 `name()`、`description()`、`usage()`、`type()`、`hidden()`、`aliases()`、`execute()` 方法。
 - **`CommandRegistry`** —— 启动时注册所有内置命令，名称冲突检测，支持 Tab 补全（`CommandCompleter`）。
 - **`CommandContext`** —— 命令执行上下文，提供 UI 控制接口。
-- **13 个内置命令**：clear、compact、do、exit、help、memory、mode、new、plan、resume、review、status、tools。
+- **14 个内置命令**：clear、compact、do、exit、help、memory、mode、new、plan、resume、review、skill、status、tools。
 - **`ExitReplException`** —— `/exit` 抛出此异常终止 REPL 主循环。
+
+### Skill 系统（v8）
+
+- **`SkillRegistry`** —— 管理所有 Skill 定义和激活状态。`loadAll()` 启动时调 `SkillLoader` 加载。
+- **`SkillLoader`** —— 两阶段加载：classpath 扫描内置 skill YAML + AGENTS.md 中 `skills:` 块声明。
+- **`ExecutionMode`** —— `SHARED`（skill 工具注入主 ToolRegistry，与内置工具共存）/ `INDEPENDENT`（`IndependentSkillRunner` 独立 Agent Loop，仅暴露白名单工具）。
+- **`SkillWhitelistCheck`** —— 第 6 层 `PermissionCheck`，INDEPENDENT 模式下仅放行白名单工具。
+- **`LoadSkillTool`** —— 第 7 个内置工具，模型可通过 `load_skill` 动态激活 skill。
+- **`ActivatedSkillsSection`** —— `PromptSection` 实现，将已激活 skill 注入系统提示词。
 
 ## 值得注意的约定
 
